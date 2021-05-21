@@ -95,7 +95,7 @@ p_effort<-ggplot(filter(Data, N>0))+
   theme(axis.text.x=element_text(angle=45, hjust=1), panel.grid=element_blank(), text=element_text(size=16), legend.position=c(0.4, 0.65), 
         legend.background = element_rect(color="black"), panel.background = element_rect(color="black"), legend.margin=margin(10,10,15,10))
 
-ggsave(p_effort, file="C:/Users/sbashevkin/OneDrive - deltacouncil/IEP/Drought/Salinity sampling effort.png",
+ggsave(p_effort, file="Outputs/Salinity sampling effort.png",
        device="png", width=15, height=18, units="in")
 
 Low_salinity_zone<-Data%>%
@@ -112,7 +112,7 @@ p_low_sal_zone<-ggplot(Low_salinity_zone)+
   theme_bw()+
   theme(axis.text.x=element_text(angle=45, hjust=1), panel.grid=element_blank(), text=element_text(size=16), legend.position=c(0.4, 0.65), 
         legend.background = element_rect(color="black"), panel.background = element_rect(color="black"), legend.margin=margin(10,10,15,10))
-ggsave(p_low_sal_zone, file="C:/Users/sbashevkin/OneDrive - deltacouncil/IEP/Drought/Low salinity zone.png",
+ggsave(p_low_sal_zone, file="Outputs/Low salinity zone.png",
        device="png", width=15, height=18, units="in")
 
 p_low_sal_zone_sd<-ggplot(Low_salinity_zone)+
@@ -125,7 +125,7 @@ p_low_sal_zone_sd<-ggplot(Low_salinity_zone)+
   theme_bw()+
   theme(axis.text.x=element_text(angle=45, hjust=1), panel.grid=element_blank(), text=element_text(size=16), legend.position=c(0.4, 0.65), 
         legend.background = element_rect(color="black"), panel.background = element_rect(color="black"), legend.margin=margin(10,10,15,10))
-ggsave(p_low_sal_zone_sd, file="C:/Users/sbashevkin/OneDrive - deltacouncil/IEP/Drought/Low salinity zone within sd.png",
+ggsave(p_low_sal_zone_sd, file="Outputs/Low salinity zone within sd.png",
        device="png", width=15, height=18, units="in")
 
 # Save csv of low salinity zone
@@ -187,11 +187,11 @@ Rosies_regions<-tibble(
                                                        "Upper Mokelumne River",
                                                        "Sacramento River near Ryde"), TRUE, FALSE))
 
-write_csv(Rosies_regions, "C:/Users/sbashevkin/OneDrive - deltacouncil/IEP/Drought/Rosies_regions.csv")
+write_csv(Rosies_regions, "Outputs/Rosies_regions.csv")
 
 Low_salinity_zone%>%
   filter(Low_sal)%>%
   select(Season, SubRegion, Year, N)%>%
   left_join(Rosies_regions)%>%
   mutate(across(c(Long_term, Short_term), ~replace_na(.x, FALSE)))%>%
-  write_csv("C:/Users/sbashevkin/OneDrive - deltacouncil/IEP/Drought/Low_salinity_zone.csv")
+  write_csv("Outputs/Low_salinity_zone.csv")
