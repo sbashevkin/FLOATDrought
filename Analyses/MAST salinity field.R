@@ -112,6 +112,7 @@ p_low_sal_zone<-ggplot(Low_salinity_zone)+
   theme_bw()+
   theme(axis.text.x=element_text(angle=45, hjust=1), panel.grid=element_blank(), text=element_text(size=16), legend.position=c(0.4, 0.65), 
         legend.background = element_rect(color="black"), panel.background = element_rect(color="black"), legend.margin=margin(10,10,15,10))
+
 ggsave(p_low_sal_zone, file="Outputs/Low salinity zone.png",
        device="png", width=15, height=18, units="in")
 
@@ -125,6 +126,7 @@ p_low_sal_zone_sd<-ggplot(Low_salinity_zone)+
   theme_bw()+
   theme(axis.text.x=element_text(angle=45, hjust=1), panel.grid=element_blank(), text=element_text(size=16), legend.position=c(0.4, 0.65), 
         legend.background = element_rect(color="black"), panel.background = element_rect(color="black"), legend.margin=margin(10,10,15,10))
+
 ggsave(p_low_sal_zone_sd, file="Outputs/Low salinity zone within sd.png",
        device="png", width=15, height=18, units="in")
 
@@ -164,7 +166,7 @@ Rosies_regions<-tibble(
                     "Sacramento River near Ryde"), each=4)),
   Season = rep(levels(Data$Season), n_distinct(SubRegion))
 )%>%
-  mutate(Long_term=case_when(SubRegion%in%c("Cache Slough and Lindsey Slough",
+  mutate(Long_term=case_when(SubRegion%in%c("Cache Slough and Lindsey Slough", # Eliminate everything NOT for the long-term model
                                             "Liberty Island",
                                             "Lower Sacramento River Ship Channel",
                                             "Upper Sacramento River Ship Channel",
@@ -177,7 +179,7 @@ Rosies_regions<-tibble(
                                             "Mildred Island") & Season!="Summer" ~ FALSE,
                              SubRegion%in%"Middle River" & Season!="Fall" ~ FALSE,
                              SubRegion%in%"Victoria Canal" & !Season%in%c("Spring", "Summer") ~ FALSE,
-                             TRUE ~ TRUE),
+                             TRUE ~ TRUE), # Now that we've eliminated everything NOT for the long-term model, everything else IS for the long-term model
          Short_term=if_else(Long_term | SubRegion%in%c("Cache Slough and Lindsey Slough",
                                                        "Liberty Island",
                                                        "Lower Sacramento River Ship Channel",
@@ -185,13 +187,13 @@ Rosies_regions<-tibble(
                                                        "Lower Cache Slough",
                                                        "Steamboat and Miner Slough",
                                                        "Upper Mokelumne River",
-                                                       "Sacramento River near Ryde"), TRUE, FALSE))
+                                                       "Sacramento River near Ryde"), TRUE, FALSE)) # Short-term model includes all long-term regions/seasons plus a few extra
 
 write_csv(Rosies_regions, "Outputs/Rosies_regions.csv")
 
 Low_salinity_zone%>%
-  filter(Low_sal)%>%
+  filter(Low_sal)%>% # Select low salinity zone by the mean seasonal salinity
   select(Season, SubRegion, Year, N)%>%
-  left_join(Rosies_regions)%>%
-  mutate(across(c(Long_term, Short_term), ~replace_na(.x, FALSE)))%>%
+  left_join(Rosies_regions)%>% # Join Rosie's regions
+  mutate(across(c(Long_term, Short_term), ~replace_na(.x, FALSE)))%>% # Convert any NA's to FALSE for the 2 model types
   write_csv("Outputs/Low_salinity_zone.csv")
