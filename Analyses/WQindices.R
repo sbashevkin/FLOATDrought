@@ -82,22 +82,10 @@ WQindices<-function(variable){
   
   variable2<-sym(variable)
   
-  Long_term_FLOAT<-vardata%>%
-    filter(Year%in%1975:2010 & Long_term)%>%
+  out<-vardata%>%
+    filter(Year%in%1975:2021)%>%
     group_by(Season, Year)%>%
     summarise({{variable}}:=mean(var_mean), "N_{{variable2}}":=sum(N), .groups="drop")
-  
-  Short_term_FLOAT<-vardata%>%
-    filter(Year%in%2010:2020 & Short_term)%>%
-    group_by(Season, Year)%>%
-    summarise({{variable}}:=mean(var_mean), "N_{{variable2}}":=sum(N), .groups="drop")
-  
-  Long_term_Drought<-vardata%>%
-    filter(Year%in%1975:2021 & Long_term)%>%
-    group_by(Season, Year)%>%
-    summarise({{variable}}:=mean(var_mean), "N_{{variable2}}":=sum(N), .groups="drop")
-  
-  out<-list(Long_term_FLOAT=Long_term_FLOAT, Short_term_FLOAT=Short_term_FLOAT, Long_term_Drought=Long_term_Drought)
   
   cat(paste("\nFinished", variable, "\n"))
   
@@ -109,45 +97,26 @@ WQ_list<-map(vars, WQindices)
 yearseasons<-expand_grid(Season=c("Winter", "Spring", "Summer", "Fall"),
                              Year=1975:2021)
 
-Long_term_FLOAT<-map(WQ_list, ~.x[["Long_term_FLOAT"]])%>%
-  map(~left_join(filter(yearseasons, Year%in%1975:2010), .x, by=c("Season", "Year"))%>%
-        select(contains(vars)))%>%
-  bind_cols(filter(yearseasons, Year%in%1975:2010), .)%>%
-  arrange(Year, Season)
-
-Short_term_FLOAT<-map(WQ_list, ~.x[["Short_term_FLOAT"]])%>%
-  map(~left_join(filter(yearseasons, Year%in%2010:2020), .x, by=c("Season", "Year"))%>%
-        select(contains(vars)))%>%
-  bind_cols(filter(yearseasons, Year%in%2010:2020), .)%>%
-  arrange(Year, Season)
-
-Long_term_Drought<-map(WQ_list, ~.x[["Long_term_Drought"]])%>%
-  map(~left_join(yearseasons, .x, by=c("Season", "Year"))%>%
+WQ_data<-map(WQ_list, ~left_join(yearseasons, .x, by=c("Season", "Year"))%>%
         select(contains(vars)))%>%
   bind_cols(yearseasons, .)%>%
   arrange(Year, Season)
 
-Long_term_Drought_n<-Long_term_Drought%>%
+WQ_data_n<-WQ_data%>%
   select(all_of(paste0("N_", vars)), Season, Year)%>%
   pivot_longer(all_of(paste0("N_", vars)), names_prefix="N_", names_to="Variable", values_to="N")%>%
   mutate(Season=factor(Season, levels=c("Winter", "Spring", "Summer", "Fall")))
 
-Long_term_Drought_n_plot<-ggplot(Long_term_Drought_n, aes(x=Year, y=N, color=Variable))+
+WQ_data_n_plot<-ggplot(WQ_data_n, aes(x=Year, y=N, color=Variable))+
   geom_line(size=1)+
   facet_wrap(~Season)+
   coord_cartesian(expand = F)+
-  ylab("Sample size")
+  ylab("Sample size")+
   scale_color_viridis_d(breaks=c("Temperature", "Secchi", "Salinity", "Chlorophyll"))+
   theme_bw()
 
-Long_term_FLOAT%>%
+WQ_data%>%
     select(-contains("N_"))%>%
     pivot_wider(names_from=Season, values_from=contains(vars))%>%
     select(Year, Chlorophyll_Fall, Temperature_Summer, Temperature_Fall, Secchi_Fall)%>%
-  write_csv("Outputs/Long_term_FLOAT.csv")
-
-Short_term_FLOAT%>%
-  select(-contains("N_"))%>%
-  pivot_wider(names_from=Season, values_from=contains(vars))%>%
-  select(Year, Chlorophyll_Fall, Temperature_Summer, Temperature_Fall, Secchi_Fall)%>%
-  write_csv("Outputs/Short_term_FLOAT.csv")
+  write_csv("Outputs/FLOAT.csv")
