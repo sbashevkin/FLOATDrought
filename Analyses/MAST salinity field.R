@@ -23,15 +23,11 @@ mygrid <- data.frame(
 
 
 ## Load Delta Shapefile from Brian
-Delta<-deltamapr::R_EDSM_Subregions_Mahardja%>%
+Delta<-deltamapr::R_EDSM_Subregions_Mahardja_FLOAT%>%
   filter(!SubRegion%in%c("South Bay", "San Francisco Bay", "San Pablo Bay", "Upper Yolo Bypass", # Remove regions outside our domain of interest
                          "Upper Napa River", "Lower Napa River", "Carquinez Strait", # Remove regions outside our domain of interest
                          "Rock Slough and Discovery Bay", "Upper Sacramento River"))%>%  # Exclude 2 regions with none or almost no samples
-  dplyr::select(SubRegion)%>%
-  mutate(SubRegion=recode(SubRegion, `Georgiana Slough`="Sacramento River near Ryde"))%>% # Merge Georgiana Slough with Sacramento River near Ryde since Georgiana has only 1 station
-  group_by(SubRegion)%>%
-  summarise()%>%
-  ungroup()
+  dplyr::select(SubRegion)
 
 Data<-wq(End_year=2021,
          Sources = c("EMP", "STN", "FMWT", "DJFMP", "SKT", "20mm", "Suisun",
