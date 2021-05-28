@@ -126,3 +126,28 @@ Long_term_Drought<-map(WQ_list, ~.x[["Long_term_Drought"]])%>%
         select(contains(vars)))%>%
   bind_cols(yearseasons, .)%>%
   arrange(Year, Season)
+
+Long_term_Drought_n<-Long_term_Drought%>%
+  select(all_of(paste0("N_", vars)), Season, Year)%>%
+  pivot_longer(all_of(paste0("N_", vars)), names_prefix="N_", names_to="Variable", values_to="N")%>%
+  mutate(Season=factor(Season, levels=c("Winter", "Spring", "Summer", "Fall")))
+
+Long_term_Drought_n_plot<-ggplot(Long_term_Drought_n, aes(x=Year, y=N, color=Variable))+
+  geom_line(size=1)+
+  facet_wrap(~Season)+
+  coord_cartesian(expand = F)+
+  ylab("Sample size")
+  scale_color_viridis_d(breaks=c("Temperature", "Secchi", "Salinity", "Chlorophyll"))+
+  theme_bw()
+
+Long_term_FLOAT%>%
+    select(-contains("N_"))%>%
+    pivot_wider(names_from=Season, values_from=contains(vars))%>%
+    select(Year, Chlorophyll_Fall, Temperature_Summer, Temperature_Fall, Secchi_Fall)%>%
+  write_csv("Outputs/Long_term_FLOAT.csv")
+
+Short_term_FLOAT%>%
+  select(-contains("N_"))%>%
+  pivot_wider(names_from=Season, values_from=contains(vars))%>%
+  select(Year, Chlorophyll_Fall, Temperature_Summer, Temperature_Fall, Secchi_Fall)%>%
+  write_csv("Outputs/Short_term_FLOAT.csv")
