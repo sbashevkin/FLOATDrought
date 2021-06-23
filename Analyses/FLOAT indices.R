@@ -29,4 +29,4 @@ WQ_data%>%
   select(-contains("N_"))%>%
   pivot_wider(names_from=Season, values_from=contains(vars))%>%
   select(Year, Chlorophyll_Fall, Temperature_Summer, Temperature_Fall, Secchi_Fall)%>%
-  write_csv("Outputs/FLOAT.csv")
+  write_csv("Outputs/FLOAT_Temp_Secchi_Chl.csv")

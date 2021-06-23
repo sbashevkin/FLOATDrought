@@ -28,4 +28,4 @@ WQ_data_n_plot
 WQ_data%>%
   select(Year, Season, Temperature, Secchi)%>%
   arrange(Season, Year)%>%
-  write_csv("Outputs/Drought.csv")
+  write_csv("Outputs/Drought_Temp_Secchi.csv")
