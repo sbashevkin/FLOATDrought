@@ -24,17 +24,23 @@ mygrid <- data.frame(
 )
 
 Low_salinity_zone<-read_csv("Outputs/Low_salinity_zone.csv")
+Regions<-read_csv("Outputs/Rosies_regions.csv")
 
 ## Load Delta Shapefile from Brian
 Delta<-deltamapr::R_EDSM_Subregions_Mahardja_FLOAT%>%
-  filter(SubRegion%in%unique(Low_salinity_zone$SubRegion))%>%  #Filter to regions of interest
+  filter(SubRegion%in%unique(Regions$SubRegion))%>%  #Filter to regions of interest
   dplyr::select(SubRegion)
 
 Data<-wq(End_year=2021,
          Sources = c("EMP", "STN", "FMWT", "DJFMP", "SKT", "20mm", "Suisun",
                      "Baystudy", "USGS"))
 
-WQindices<-function(variable){
+WQindices<-function(variable, region="LSZ"){
+  
+  if(!region%in%c("LSZ", "All")){
+    stop("region must be either 'LSZ' or 'All'")
+  }
+  
   vardata<-Data%>% # Select all long-term surveys (excluding EDSM and the USBR Sacramento ship channel study)
     filter(!is.na(.data[[variable]]) & !is.na(Latitude) & !is.na(Datetime) & !is.na(Longitude) & !is.na(Date))%>% #Remove any rows with NAs in our key variables
     mutate(Datetime = with_tz(Datetime, tz="America/Phoenix"), #Convert to a timezone without daylight savings time
@@ -76,9 +82,16 @@ WQindices<-function(variable){
     summarise(var_mean=mean(var_month_mean), N=sum(N))%>% # Calculate seasonal mean variable, seasonal sd as the sqrt of the mean monthly variance, total seasonal sample size
     ungroup()%>%
     as_tibble()%>% # End dtplyr operation
-    left_join(select(Low_salinity_zone, -N), 
-              by=c("Season", "SubRegion", "Year"))%>% # Add low salinity zone designations
-    filter(Long_term | Short_term) # Remove any data outside the low salinity zone
+    {if(region=="LSZ"){ # For FLOAT analysis
+      left_join(., select(Low_salinity_zone, -N), 
+                by=c("Season", "SubRegion", "Year"))%>% # Add low salinity zone designations
+        filter(Long_term | Short_term) # Remove any data outside the low salinity zone
+    }else{ # For Drought analysis
+      left_join(., Regions, 
+                by=c("Season", "SubRegion"))%>% # Add low salinity zone designations
+        filter(Long_term) # Remove any data not chosen for the long-term analysis
+    }
+    } 
   
   variable2<-sym(variable)
   
@@ -91,32 +104,3 @@ WQindices<-function(variable){
   
   return(out)
 }
-vars<-c("Salinity", "Temperature", "Secchi", "Chlorophyll")
-WQ_list<-map(vars, WQindices)
-
-yearseasons<-expand_grid(Season=c("Winter", "Spring", "Summer", "Fall"),
-                             Year=1975:2021)
-
-WQ_data<-map(WQ_list, ~left_join(yearseasons, .x, by=c("Season", "Year"))%>%
-        select(contains(vars)))%>%
-  bind_cols(yearseasons, .)%>%
-  arrange(Year, Season)
-
-WQ_data_n<-WQ_data%>%
-  select(all_of(paste0("N_", vars)), Season, Year)%>%
-  pivot_longer(all_of(paste0("N_", vars)), names_prefix="N_", names_to="Variable", values_to="N")%>%
-  mutate(Season=factor(Season, levels=c("Winter", "Spring", "Summer", "Fall")))
-
-WQ_data_n_plot<-ggplot(WQ_data_n, aes(x=Year, y=N, color=Variable))+
-  geom_line(size=1)+
-  facet_wrap(~Season)+
-  coord_cartesian(expand = F)+
-  ylab("Sample size")+
-  scale_color_viridis_d(breaks=c("Temperature", "Secchi", "Salinity", "Chlorophyll"))+
-  theme_bw()
-
-WQ_data%>%
-    select(-contains("N_"))%>%
-    pivot_wider(names_from=Season, values_from=contains(vars))%>%
-    select(Year, Chlorophyll_Fall, Temperature_Summer, Temperature_Fall, Secchi_Fall)%>%
-  write_csv("Outputs/FLOAT.csv")
