@@ -9,6 +9,7 @@ require(tidyr)
 require(purrr)
 require(rlang)
 require(readr)
+require(readxl)
 require(dtplyr) # To speed things up
 require(ggplot2) # Plotting
 require(geofacet) # plotting
@@ -24,7 +25,7 @@ mygrid <- data.frame(
 )
 
 Low_salinity_zone<-read_csv("Outputs/Low_salinity_zone.csv")
-Regions<-read_csv("Outputs/Rosies_regions.csv")
+Regions<-read_excel("Data/Rosies_regions.xlsx")
 
 ## Load Delta Shapefile from Brian
 Delta<-deltamapr::R_EDSM_Subregions_Mahardja_FLOAT%>%
@@ -35,10 +36,18 @@ Data<-wq(End_year=2021,
          Sources = c("EMP", "STN", "FMWT", "DJFMP", "SKT", "20mm", "Suisun",
                      "Baystudy", "USGS"))
 
-WQindices<-function(variable, region="LSZ"){
+WQindices<-function(variable, region="LSZ",type="season", month.na="strict"){
   
-  if(!region%in%c("LSZ", "All")){
-    stop("region must be either 'LSZ' or 'All'")
+  if(!region%in%c("LSZ", "all")){
+    stop("region must be either 'LSZ' or 'all'")
+  }
+  
+  if(!month.na%in%c("strict", "relaxed")){
+    stop("month.na must be either 'strict' or 'relaxed'")
+  }
+  
+  if(!type%in%c("season", "year")){
+    stop("type must be either 'season' or 'year'")
   }
   
   vardata<-Data%>% # Select all long-term surveys (excluding EDSM and the USBR Sacramento ship channel study)
@@ -71,33 +80,42 @@ WQindices<-function(variable, region="LSZ"){
                             Month%in%9:11 ~ "Fall",
                             Month%in%c(12, 1, 2) ~ "Winter",
                             TRUE ~ NA_character_))%>%
-    lazy_dt()%>% # Use dtplyr to speed up operations
-    group_by(Month, Season, SubRegion, Year)%>%
-    summarise(var_month_mean=mean(.data[[variable]]), N=n())%>% # Calculate monthly mean, variance, sample size
-    ungroup()%>%
-    as_tibble()%>% # End dtplyr operation
-    complete(nesting(Month, Season), SubRegion, Year, fill=list(N=0))%>% # Fill in NAs for variable (and 0 for N) for any missing month, subregion, year combinations to make sure all months are represented in each season
-    lazy_dt()%>% # Use dtplyr to speed up operations
-    group_by(Season, SubRegion, Year)%>%
-    summarise(var_mean=mean(var_month_mean), N=sum(N))%>% # Calculate seasonal mean variable, seasonal sd as the sqrt of the mean monthly variance, total seasonal sample size
-    ungroup()%>%
-    as_tibble()%>% # End dtplyr operation
     {if(region=="LSZ"){ # For FLOAT analysis
       left_join(., select(Low_salinity_zone, -N), 
                 by=c("Season", "SubRegion", "Year"))%>% # Add low salinity zone designations
         filter(Long_term | Short_term) # Remove any data outside the low salinity zone
     }else{ # For Drought analysis
       left_join(., Regions, 
-                by=c("Season", "SubRegion"))%>% # Add low salinity zone designations
+                by=c("Season", "SubRegion"))%>% # Add region designations
         filter(Long_term) # Remove any data not chosen for the long-term analysis
-    }
-    } 
+    }}%>%
+    lazy_dt()%>% # Use dtplyr to speed up operations
+    group_by(Month, Season, Region, Year)%>%
+    summarise(var_month_mean=mean(.data[[variable]]), N=n())%>% # Calculate monthly mean and sample size
+    ungroup()%>%
+    as_tibble()%>% # End dtplyr operation
+    {if(month.na=="strict"){
+      complete(., nesting(Month, Season), Region, Year, fill=list(N=0)) # Fill in NAs for variable (and 0 for N) for any missing month, Region, year combinations to make sure all months are represented in each season
+    }else{
+      complete(., Season, Region, Year, fill=list(N=0)) # Fill in NAs for variable (and 0 for N) for any missing season, Region, year combinations to make sure all regions are represented in each season
+    }}%>%
+    lazy_dt()%>% # Use dtplyr to speed up operations
+    group_by(Season, Region, Year)%>%
+    summarise(var_mean=mean(var_month_mean), N=sum(N))%>% # Calculate seasonal mean variable, seasonal sd as the sqrt of the mean monthly variance, total seasonal sample size
+    ungroup()%>%
+    as_tibble() # End dtplyr operation
+    
   
   variable2<-sym(variable)
   
   out<-vardata%>%
     filter(Year%in%1975:2021)%>%
-    group_by(Season, Year)%>%
+    {if(type=="season"){
+      group_by(., Season, Year)
+    }else{
+      complete(., Season, Region, Year, fill=list(N=0))%>%
+      group_by(Region, Year)
+    }}%>%
     summarise({{variable}}:=mean(var_mean), "N_{{variable2}}":=sum(N), .groups="drop")
   
   cat(paste("\nFinished", variable, "\n"))
