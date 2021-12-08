@@ -1,0 +1,22 @@
+---
+title: "index"
+author: Sam Bashevkin
+output: html_document
+editor_options: 
+  chunk_output_type: console
+knit: (function(input, ...) {
+    rmarkdown::render(
+      input,
+      output_dir = 'docs',
+      envir = globalenv()
+    )
+  })
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# FLOAT / Drought analyses
+
+## [Temperature analyses](Temperature-analyses.html)

@@ -1,0 +1,229 @@
+---
+title: "Temperature analyses"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+knit: (function(input, ...) {
+    rmarkdown::render(
+      input,
+      output_dir = 'docs',
+      knit_root_dir = "../",
+      envir = globalenv()
+    )
+    })
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r packages, message=FALSE}
+require(dplyr)
+require(DroughtData)
+require(ggplot2)
+require(patchwork)
+require(knitr)
+```
+
+# Functions
+
+```{r}
+model_plotter<-function(model, data){
+  data<-data%>%
+    mutate(Residuals=resid(model),
+           Fitted=predict(model))
+  
+  p_hist<-ggplot(data, aes(x=Residuals))+
+    geom_histogram()+
+    theme_bw()
+  
+  p_res_fit<-ggplot(data, aes(x=Residuals, y=Fitted))+
+    geom_point()+
+    ylab("Predicted temperature")+
+    theme_bw()
+  
+  p_obs_fit<-ggplot(data, aes(x=Temperature, y=Fitted))+
+    geom_point()+
+    geom_abline(slope=1, intercept=0, color="red")+
+    ylab("Predicted temperature")+
+    xlab("Observed temperature")+
+    theme_bw()
+
+  out<-(p_hist+plot_layout(ncol=1))+(p_res_fit+p_obs_fit+plot_layout(ncol=2))+plot_layout(nrow=2, widths=c(1, 0.5, 0.5))
+  
+  return(out)
+}
+
+tukey_plotter<-function(model, data_type, model_type){
+  tuk<-TukeyHSD(model)
+
+tuk_reg<-as_tibble(tuk[[data_type]], rownames=data_type, .name_repair = "universal")%>%
+  mutate(Significance=factor(if_else(p.adj<0.05, "p < 0.05", "ns"), levels=c("p < 0.05", "ns")))
+
+tuk_d<-as_tibble(tuk[[model_type]], rownames=model_type, .name_repair = "universal")%>%
+  mutate(Significance=factor(if_else(p.adj<0.05, "p < 0.05", "ns"), levels=c("p < 0.05", "ns")))
+
+p_reg<-ggplot(tuk_reg, aes(x=diff, xmin=lwr, xmax=upr, y=.data[[data_type]], shape=Significance))+
+  geom_pointrange(fill="white", color="black")+
+  geom_vline(xintercept=0, color="red")+
+  scale_shape_manual(values=c(21, 16), drop=FALSE)+
+  theme_bw()
+
+p_d<-ggplot(tuk_d, aes(x=diff, xmin=lwr, xmax=upr, y=.data[[model_type]], shape=Significance))+
+  geom_pointrange(fill="white", color="black")+
+  geom_vline(xintercept=0, color="red")+
+  scale_shape_manual(values=c(21, 16), drop=FALSE)+
+  theme_bw()
+
+out<-p_reg/p_d+plot_layout(guides = "collect")
+
+return(out)
+}
+```
+
+
+# Load data
+
+```{r}
+data_regional<-lt_regional%>%
+  filter(!is.na(Temperature))%>%
+  mutate(Region=factor(Region, levels=c("Suisun Marsh", "Suisun Bay", "Confluence", "SouthCentral", "North")),
+         Year_fac=factor(YearAdj))
+data_seasonal<-lt_seasonal%>%
+  filter(!is.na(Temperature))%>%
+  mutate(Season=factor(Season, levels=c("Winter", "Spring", "Summer", "Fall")),
+         Year_fac=factor(YearAdj))
+```
+
+# Plots
+
+## Regional
+
+Plot regional data by year
+```{r}
+ggplot(data_regional, aes(x=YearAdj, y=Temperature, fill=Drought))+
+  geom_point(shape=21, color="black")+
+  facet_wrap(~Region)+
+  scale_fill_viridis_d()+
+  theme_bw()
+```
+
+Plot regional data by Drought index
+```{r}
+ggplot(data_regional, aes(x=Drought, y=Temperature, fill=Drought))+
+  geom_boxplot()+
+  facet_wrap(~Region)+
+  scale_fill_viridis_d()+
+  theme_bw()
+```
+
+## Seasonal
+
+Plot seasonal data by year
+```{r}
+ggplot(data_seasonal, aes(x=YearAdj, y=Temperature, fill=Drought))+
+  geom_point(shape=21, color="black")+
+  facet_wrap(~Season, scales="free")+
+  scale_fill_viridis_d()+
+  theme_bw()
+```
+
+Plot seasonal data by Drought index
+```{r}
+ggplot(data_seasonal, aes(x=Drought, y=Temperature, fill=Drought))+
+  geom_boxplot()+
+  facet_wrap(~Season, scales="free")+
+  scale_fill_viridis_d()+
+  theme_bw()
+```
+
+# Analyses
+
+## Regional
+
+### Drought
+
+```{r}
+m_reg_d<-aov(Temperature ~ Drought + Region, data=data_regional)
+```
+
+Check assumptions:
+```{r}
+model_plotter(m_reg_d, data_regional)
+```
+
+Check results
+```{r}
+anova(m_reg_d)
+```
+
+post-hoc test
+```{r}
+tukey_plotter(m_reg_d, "Region", "Drought")
+```
+
+### Year
+
+```{r}
+m_reg_y<-aov(Temperature ~ Year_fac + Region, data=data_regional)
+```
+
+Check assumptions:
+```{r}
+model_plotter(m_reg_y, data_regional)
+```
+
+Check results
+```{r}
+anova(m_reg_y)
+```
+
+post-hoc test
+```{r}
+tukey_plotter(m_reg_y, "Region", "Year_fac")
+```
+
+## Seasonal
+
+### Drought
+
+```{r}
+m_seas_d<-aov(Temperature ~ Drought + Season, data=data_seasonal)
+```
+
+Check assumptions:
+```{r}
+model_plotter(m_seas_d, data_seasonal)
+```
+
+Check results
+```{r}
+anova(m_seas_d)
+```
+
+post-hoc test
+```{r}
+tukey_plotter(m_seas_d, "Season", "Drought")
+```
+
+### Year
+
+```{r}
+m_seas_y<-aov(Temperature ~ Year_fac + Season, data=data_seasonal)
+```
+
+Check assumptions:
+```{r}
+model_plotter(m_seas_y, data_seasonal)
+```
+
+Check results
+```{r}
+anova(m_seas_y)
+```
+
+post-hoc test
+```{r}
+tukey_plotter(m_seas_y, "Season", "Year_fac")
+```
