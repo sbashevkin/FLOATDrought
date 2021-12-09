@@ -252,3 +252,57 @@ post-hoc test
 ```{r, fig.width=12, fig.height=12}
 tukey_plotter(m_seas_y, "Season", "Year_fac")
 ```
+
+# Comparing 2021 to prior years
+
+```{r}
+raw_data<-DroughtData::raw_wq_1975_2021%>%
+  filter(!is.na(Temperature))%>%
+  left_join(data_regional%>%
+              distinct(YearAdj, SVIndex, YearType, Drought),
+            by="YearAdj")%>%
+  mutate(across(c(Drought, YearType), list(`21`=~if_else(YearAdj==2021, "2021", as.character(.x)))),
+         across(c(YearType, YearType_21), ~factor(.x, levels=c("2021", "Critical", "Dry", "Below Normal", "Above Normal", "Wet"))),
+         Region=factor(Region, levels=c("Suisun Marsh", "Suisun Bay", "Confluence", "SouthCentral", "North")),
+         Season=factor(Season, levels=c("Winter", "Spring", "Summer", "Fall")))
+```
+
+How does 2021 compare to Drought, Normal, and Wet periods?
+```{r}
+ggplot(raw_data, aes(x=Drought_21, y=Temperature, fill=Drought))+
+  geom_boxplot()+
+  scale_fill_viridis_d(direction = -1)+
+  xlab("Drought")+
+  theme_bw()
+```
+
+Does that change regionally or seasonally?
+```{r, fig.width=12, fig.height=12}
+ggplot(raw_data, aes(x=Drought_21, y=Temperature, fill=Drought))+
+  geom_boxplot()+
+  scale_fill_viridis_d(direction = -1)+
+  facet_grid(Season~Region, scales = "free_y")+
+  xlab("Drought")+
+  theme_bw(base_size = 16)
+```
+
+
+How does 2021 compare to each water year type?
+```{r}
+ggplot(raw_data, aes(x=YearType_21, y=Temperature, fill=YearType))+
+  geom_boxplot()+
+  scale_fill_viridis_d(direction = -1)+
+  xlab("Year type")+
+  theme_bw()
+```
+
+Does that change regionally or seasonally?
+```{r, fig.width=12, fig.height=12}
+ggplot(raw_data, aes(x=YearType_21, y=Temperature, fill=YearType))+
+  geom_boxplot()+
+  scale_fill_viridis_d(direction = -1)+
+  facet_grid(Season~Region, scales = "free_y")+
+  xlab("Year type")+
+  theme_bw(base_size = 16)+
+  theme(axis.text.x=element_text(angle=45, hjust=1))
+```
