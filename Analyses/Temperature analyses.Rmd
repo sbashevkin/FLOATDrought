@@ -17,7 +17,7 @@ knit: (function(input, ...) {
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r packages, message=FALSE}
+```{r packages, message=FALSE, warning=FALSE}
 require(dplyr)
 require(DroughtData)
 require(ggplot2)
@@ -39,18 +39,20 @@ model_plotter<-function(model, data){
   
   p_hist<-ggplot(data, aes(x=Residuals))+
     geom_histogram()+
+    xlab("Residuals (°C)")+
     theme_bw()
   
   p_res_fit<-ggplot(data, aes(x=Residuals, y=Fitted))+
     geom_point()+
-    ylab("Predicted temperature")+
+    ylab("Predicted temperature (°C)")+
+    xlab("Residuals (°C)")+
     theme_bw()
   
   p_obs_fit<-ggplot(data, aes(x=Temperature, y=Fitted))+
     geom_point()+
     geom_abline(slope=1, intercept=0, color="red")+
-    ylab("Predicted temperature")+
-    xlab("Observed temperature")+
+    ylab("Predicted temperature (°C)")+
+    xlab("Observed temperature (°C)")+
     theme_bw()
   
   out<-(p_hist+plot_layout(ncol=1))+(p_res_fit+p_obs_fit+plot_layout(ncol=2))+plot_layout(nrow=2, widths=c(1, 0.5, 0.5))
@@ -116,6 +118,7 @@ ggplot(data_regional, aes(x=YearAdj, y=Temperature, fill=Drought))+
   geom_point(shape=21, color="black")+
   facet_wrap(~Region)+
   scale_fill_viridis_d()+
+  ylab("Temperature (°C)")+
   theme_bw()
 ```
 
@@ -126,6 +129,7 @@ ggplot(data_regional, aes(x=Drought, y=Temperature, fill=Drought))+
   geom_boxplot()+
   facet_wrap(~Region)+
   scale_fill_viridis_d()+
+  ylab("Temperature (°C)")+
   theme_bw()
 ```
 
@@ -138,6 +142,7 @@ ggplot(data_seasonal, aes(x=YearAdj, y=Temperature, fill=Drought))+
   geom_point(shape=21, color="black")+
   facet_wrap(~Season, scales="free")+
   scale_fill_viridis_d()+
+  ylab("Temperature (°C)")+
   theme_bw()
 ```
 
@@ -148,6 +153,7 @@ ggplot(data_seasonal, aes(x=Drought, y=Temperature, fill=Drought))+
   geom_boxplot()+
   facet_wrap(~Season, scales="free")+
   scale_fill_viridis_d()+
+  ylab("Temperature (°C)")+
   theme_bw()
 ```
 
@@ -273,6 +279,7 @@ ggplot(raw_data, aes(x=Drought_21, y=Temperature, fill=Drought))+
   geom_boxplot()+
   scale_fill_viridis_d(direction = -1)+
   xlab("Drought")+
+  ylab("Temperature (°C)")+
   theme_bw()
 ```
 
@@ -283,6 +290,7 @@ ggplot(raw_data, aes(x=Drought_21, y=Temperature, fill=Drought))+
   scale_fill_viridis_d(direction = -1)+
   facet_grid(Season~Region, scales = "free_y")+
   xlab("Drought")+
+  ylab("Temperature (°C)")+
   theme_bw(base_size = 16)
 ```
 
@@ -293,6 +301,7 @@ ggplot(raw_data, aes(x=YearType_21, y=Temperature, fill=YearType))+
   geom_boxplot()+
   scale_fill_viridis_d(direction = -1)+
   xlab("Year type")+
+  ylab("Temperature (°C)")+
   theme_bw()
 ```
 
@@ -303,6 +312,7 @@ ggplot(raw_data, aes(x=YearType_21, y=Temperature, fill=YearType))+
   scale_fill_viridis_d(direction = -1)+
   facet_grid(Season~Region, scales = "free_y")+
   xlab("Year type")+
+  ylab("Temperature (°C)")+
   theme_bw(base_size = 16)+
   theme(axis.text.x=element_text(angle=45, hjust=1))
 ```
