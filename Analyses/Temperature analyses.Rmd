@@ -27,6 +27,8 @@ require(car)
 require(multcomp)
 require(emmeans)
 require(stringr)
+require(readr)
+save_dir<-file.path("FLOATDrought", "Outputs")
 ```
 
 # Functions
@@ -60,33 +62,48 @@ model_plotter<-function(model, data){
   return(out)
 }
 
-tukey_plotter<-function(model, data_type, model_type){
+tukey_plotter<-function(model, data, data_type, model_type){
   
   tuk<-emmeans(model, list(data=data_type, model=model_type))
   
   tuk_data<-as_tibble(cld(tuk$data, sort=FALSE, Letters = letters))%>%
-    mutate(.group=str_remove_all(.group, fixed(" ")))
+    mutate(.group=str_remove_all(.group, fixed(" ")))%>%
+    left_join(data%>%
+                group_by(across(all_of(data_type)))%>%
+                summarise(max_temp=max(Temperature), .groups="drop"),
+              by=data_type)
   
   tuk_model<-as_tibble(cld(tuk$model, sort=FALSE, Letters = letters))%>%
-    mutate(.group=str_remove_all(.group, fixed(" ")))
+    mutate(.group=str_remove_all(.group, fixed(" ")))%>%
+    left_join(data%>%
+                group_by(across(all_of(model_type)))%>%
+                summarise(max_temp=max(Temperature), .groups="drop"),
+              by=model_type)
   
   p_data<-ggplot(tuk_data, aes(x=.data[[data_type]], y=emmean, ymin=lower.CL, ymax=upper.CL, label=.group))+
-    geom_pointrange()+
-    geom_text(aes(y=upper.CL+(max(upper.CL)-min(lower.CL))/20), size=6)+
+    geom_boxplot(data=data, aes(x=.data[[data_type]], y=Temperature), inherit.aes = FALSE)+
+    geom_pointrange(color="red", position=position_nudge(x=0.1))+
+    geom_text(aes(y=max_temp+(max(data$Temperature)-min(data$Temperature))/20), size=6)+
     ylab("Temperature (°C)")+
     theme_bw(base_size=16)
   
   p_model<-ggplot(tuk_model, aes(x=.data[[model_type]], y=emmean, ymin=lower.CL, ymax=upper.CL, label=.group))+
-    geom_pointrange()+
-    geom_text(aes(y=upper.CL+(max(upper.CL)-min(lower.CL))/20), angle=if_else(model_type=="Year_fac", 90, 0), hjust=if_else(model_type=="Year_fac", "left", NA_character_), vjust=0.25, size=6)+
+    geom_boxplot(data=data, aes(x=.data[[model_type]], y=Temperature), inherit.aes = FALSE)+
+    geom_pointrange(color="red", position=position_nudge(x=0.1))+
+    geom_text(aes(y=max_temp+(max(data$Temperature)-min(data$Temperature))/20), angle=if_else(model_type=="Year_fac", 90, 0), hjust=if_else(model_type=="Year_fac", "left", NA_character_), vjust=0.25, size=6)+
     ylab("Temperature (°C)")+
     theme_bw(base_size=16)
   
   if(model_type=="Year_fac"){
-    p_model<-p_model+theme(axis.text.x=element_text(angle=90, vjust=0.5))
+    p_model<-p_model+theme(axis.text.x=element_text(angle=90, vjust=0.5))+
+      scale_y_continuous(expand = expansion(mult=c(0,0.1)))
   }
   
   out<-p_data/p_model
+  
+  if(model_type=="Year_fac"){
+    out<-out+plot_layout(heights = c(0.8, 1))
+  }
   
   return(out)
 }
@@ -176,13 +193,16 @@ model_plotter(m_reg_d, data_regional)
 Check results
 
 ```{r}
-Anova(m_reg_d, type=2)
+m_reg_d_Anova<-Anova(m_reg_d, type=2)
+m_reg_d_Anova
 ```
 
 post-hoc test
 
 ```{r, fig.width=12, fig.height=12}
-tukey_plotter(m_reg_d, "Region", "Drought")
+p_m_reg_d<-tukey_plotter(m_reg_d, data_regional, "Region", "Drought")
+ggsave(plot=p_m_reg_d, filename=file.path(save_dir, "Temp_region_drought_model.png"), device="png", height=6, width=7, units="in")
+p_m_reg_d
 ```
 
 ### Year
@@ -200,13 +220,16 @@ model_plotter(m_reg_y, data_regional)
 Check results
 
 ```{r}
-Anova(m_reg_y, type=2)
+m_reg_y_Anova<-Anova(m_reg_y, type=2)
+m_reg_y_Anova
 ```
 
 post-hoc test
 
 ```{r, fig.width=12, fig.height=12}
-tukey_plotter(m_reg_y, "Region", "Year_fac")
+p_m_reg_y<-tukey_plotter(m_reg_y, data_regional, "Region", "Year_fac")
+ggsave(plot=p_m_reg_y, filename=file.path(save_dir, "Temp_region_year_model.png"), device="png", height=12, width=15, units="in")
+p_m_reg_y
 ```
 
 ## Seasonal
@@ -226,13 +249,16 @@ model_plotter(m_seas_d, data_seasonal)
 Check results
 
 ```{r}
-Anova(m_seas_d, type=2)
+m_seas_d_Anova<-Anova(m_seas_d, type=2)
+m_seas_d_Anova
 ```
 
 post-hoc test
 
 ```{r, fig.width=12, fig.height=12}
-tukey_plotter(m_seas_d, "Season", "Drought")
+p_m_seas_d<-tukey_plotter(m_seas_d, data_seasonal, "Season", "Drought")
+ggsave(plot=p_m_seas_d, filename=file.path(save_dir, "Temp_season_drought_model.png"), device="png", height=10, width=7, units="in")
+p_m_seas_d
 ```
 
 ### Year
@@ -250,14 +276,31 @@ model_plotter(m_seas_y, data_seasonal)
 Check results
 
 ```{r}
-Anova(m_seas_y, type=2)
+m_seas_y_Anova<-Anova(m_seas_y, type=2)
+m_seas_y_Anova
 ```
 
 post-hoc test
 
 ```{r, fig.width=12, fig.height=12}
-tukey_plotter(m_seas_y, "Season", "Year_fac")
+p_m_seas_y<-tukey_plotter(m_seas_y, data_seasonal, "Season", "Year_fac")
+ggsave(plot=p_m_seas_y, filename=file.path(save_dir, "Temp_season_year_model.png"), device="png", height=12, width=15, units="in")
+p_m_seas_y
 ```
+
+## Save all Anova outputs
+
+```{r}
+anovas<-bind_rows(
+  mutate(as_tibble(m_reg_d_Anova, rownames = "Parameter"), model="Regional_Drought"),
+  mutate(as_tibble(m_reg_y_Anova, rownames = "Parameter"), model="Regional_Year"),
+  mutate(as_tibble(m_seas_d_Anova, rownames = "Parameter"), model="Seasonal_Drought"),
+  mutate(as_tibble(m_seas_y_Anova, rownames = "Parameter"), model="Seasonal_Year")
+)%>%
+  mutate(`Pr(>F)`=if_else(`Pr(>F)`<0.001, "< 0.001", as.character(round(`Pr(>F)`, 4))))%>%
+  write_csv(file.path(save_dir, "Temp_anovas.csv"))
+```
+
 
 # Comparing 2021 to prior years
 
@@ -267,47 +310,57 @@ raw_data<-DroughtData::raw_wq_1975_2021%>%
   left_join(data_regional%>%
               distinct(YearAdj, SVIndex, YearType, Drought),
             by="YearAdj")%>%
-  mutate(across(c(Drought, YearType), list(`21`=~if_else(YearAdj==2021, "2021", as.character(.x)))),
-         across(c(YearType, YearType_21), ~factor(.x, levels=c("2021", "Critical", "Dry", "Below Normal", "Above Normal", "Wet"))),
+  mutate(across(c(Drought, YearType), list(`20_21`=~case_when(YearAdj==2021 ~ "2021", 
+                                                              YearAdj==2020 ~ "2020", 
+                                                              TRUE ~ as.character(.x)))),
+         across(c(YearType, YearType_20_21), ~factor(.x, levels=c("2020", "2021", "Critical", "Dry", "Below Normal", "Above Normal", "Wet"))),
          Region=factor(Region, levels=c("Suisun Marsh", "Suisun Bay", "Confluence", "SouthCentral", "North")),
          Season=factor(Season, levels=c("Winter", "Spring", "Summer", "Fall")))
 ```
 
 How does 2021 compare to Drought, Normal, and Wet periods?
 ```{r}
-ggplot(raw_data, aes(x=Drought_21, y=Temperature, fill=Drought))+
+p_2021_d<-ggplot(raw_data, aes(x=Drought_20_21, y=Temperature, fill=Drought))+
   geom_boxplot()+
   scale_fill_viridis_d(direction = -1)+
   xlab("Drought")+
   ylab("Temperature (°C)")+
   theme_bw()
+ggsave(plot=p_2021_d, filename=file.path(save_dir, "Temp_drought_20_21.png"), device="png", height=4, width=5, units="in")
+p_2021_d
 ```
 
 Does that change regionally or seasonally?
 ```{r, fig.width=12, fig.height=12}
-ggplot(raw_data, aes(x=Drought_21, y=Temperature, fill=Drought))+
+p_2021_d_rs<-ggplot(raw_data, aes(x=Drought_20_21, y=Temperature, fill=Drought))+
   geom_boxplot()+
   scale_fill_viridis_d(direction = -1)+
   facet_grid(Season~Region, scales = "free_y")+
   xlab("Drought")+
   ylab("Temperature (°C)")+
-  theme_bw(base_size = 16)
+  theme_bw(base_size = 16)+
+  theme(axis.text.x=element_text(angle = 45, hjust=1))
+ggsave(plot=p_2021_d_rs, filename=file.path(save_dir, "Temp_drought_rs_20_21.png"), device="png", height=8, width=10, units="in")
+p_2021_d_rs
 ```
 
 
 How does 2021 compare to each water year type?
 ```{r}
-ggplot(raw_data, aes(x=YearType_21, y=Temperature, fill=YearType))+
+p_2021_yt<-ggplot(raw_data, aes(x=YearType_20_21, y=Temperature, fill=YearType))+
   geom_boxplot()+
   scale_fill_viridis_d(direction = -1)+
   xlab("Year type")+
   ylab("Temperature (°C)")+
-  theme_bw()
+  theme_bw()+
+  theme(axis.text.x=element_text(angle = 45, hjust=1))
+ggsave(plot=p_2021_yt, filename=file.path(save_dir, "Temp_yeartype_20_21.png"), device="png", height=4, width=6, units="in")
+p_2021_yt
 ```
 
 Does that change regionally or seasonally?
 ```{r, fig.width=12, fig.height=12}
-ggplot(raw_data, aes(x=YearType_21, y=Temperature, fill=YearType))+
+p_2021_yt_rs<-ggplot(raw_data, aes(x=YearType_20_21, y=Temperature, fill=YearType))+
   geom_boxplot()+
   scale_fill_viridis_d(direction = -1)+
   facet_grid(Season~Region, scales = "free_y")+
@@ -315,4 +368,6 @@ ggplot(raw_data, aes(x=YearType_21, y=Temperature, fill=YearType))+
   ylab("Temperature (°C)")+
   theme_bw(base_size = 16)+
   theme(axis.text.x=element_text(angle=45, hjust=1))
+ggsave(plot=p_2021_yt_rs, filename=file.path(save_dir, "Temp_yeartype_rs_20_21.png"), device="png", height=8, width=12, units="in")
+p_2021_yt_rs
 ```
