@@ -92,6 +92,9 @@ tukey_plotter<-function(model, data, data_type, model_type){
     geom_pointrange(color="red", position=position_nudge(x=0.1))+
     geom_text(aes(y=max_temp+(max(data$Temperature)-min(data$Temperature))/20), angle=if_else(model_type=="Year_fac", 90, 0), hjust=if_else(model_type=="Year_fac", "left", NA_character_), vjust=0.25, size=6)+
     ylab("Temperature (°C)")+
+    {if(model_type=="Year_fac"){
+      xlab("Year")
+    }}+
     theme_bw(base_size=16)
   
   if(model_type=="Year_fac"){
@@ -99,7 +102,7 @@ tukey_plotter<-function(model, data, data_type, model_type){
       scale_y_continuous(expand = expansion(mult=c(0,0.1)))
   }
   
-  out<-p_data/p_model
+  out<-p_data/p_model+plot_annotation(tag_levels="A")
   
   if(model_type=="Year_fac"){
     out<-out+plot_layout(heights = c(0.8, 1))
