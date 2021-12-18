@@ -1,5 +1,6 @@
 ---
 title: "Temperature analyses"
+author: "Sam Bashevkin"
 output: html_document
 editor_options: 
   chunk_output_type: console
@@ -92,15 +93,17 @@ tukey_plotter<-function(model, data, data_type, model_type){
     geom_pointrange(color="red", position=position_nudge(x=0.1))+
     geom_text(aes(y=max_temp+(max(data$Temperature)-min(data$Temperature))/20), angle=if_else(model_type=="Year_fac", 90, 0), hjust=if_else(model_type=="Year_fac", "left", NA_character_), vjust=0.25, size=6)+
     ylab("Temperature (°C)")+
+    theme_bw(base_size=16)+
     {if(model_type=="Year_fac"){
-      xlab("Year")
-    }}+
-    theme_bw(base_size=16)
-  
-  if(model_type=="Year_fac"){
-    p_model<-p_model+theme(axis.text.x=element_text(angle=90, vjust=0.5))+
-      scale_y_continuous(expand = expansion(mult=c(0,0.1)))
-  }
+      list(geom_tile(data=data, 
+                     aes(x=Year_fac, y=min(Temperature)-(max(Temperature)-min(Temperature))/20, 
+                         fill=Drought, height=(max(Temperature)-min(Temperature))/20), 
+                     inherit.aes = FALSE),
+           xlab("Year"),
+           theme(axis.text.x=element_text(angle=90, vjust=0.5)),
+           scale_y_continuous(expand = expansion(mult=c(0,0.1))),
+           scale_fill_viridis_d(direction = -1))
+    }}
   
   out<-p_data/p_model+plot_annotation(tag_levels="A")
   

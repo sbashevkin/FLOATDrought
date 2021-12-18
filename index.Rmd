@@ -1,5 +1,5 @@
 ---
-title: "index"
+title: "FLOAT/Drought analyses"
 author: Sam Bashevkin
 output: html_document
 editor_options: 
