@@ -260,6 +260,11 @@ tukey_plotter&lt;-function(model, data, data_type, model_type){
   }
   
   return(out)
+}
+
+partial.r2&lt;-function(ANOVA, factor){
+  r2&lt;-ANOVA[factor, &quot;Sum Sq&quot;]/(ANOVA[factor, &quot;Sum Sq&quot;]+ ANOVA[&quot;Residuals&quot;, &quot;Sum Sq&quot;])
+  return(r2)
 }</code></pre>
 </div>
 <div id="load-data" class="section level1">
@@ -339,6 +344,9 @@ m_reg_d_Anova</code></pre>
 ## Residuals 85.650 217                      
 ## ---
 ## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1</code></pre>
+<p>How much variability is explained by the Drought index (partial R2)</p>
+<pre class="r"><code>partial.r2(m_reg_d_Anova, &quot;Drought&quot;)</code></pre>
+<pre><code>## [1] 0.220976</code></pre>
 <p>post-hoc test</p>
 <pre class="r"><code>p_m_reg_d&lt;-tukey_plotter(m_reg_d, data_regional, &quot;Region&quot;, &quot;Drought&quot;)
 ggsave(plot=p_m_reg_d, filename=file.path(save_dir, &quot;Temp_region_drought_model.png&quot;), device=&quot;png&quot;, height=6, width=7, units=&quot;in&quot;)
@@ -364,6 +372,9 @@ m_reg_y_Anova</code></pre>
 ## Residuals 21.955 173                      
 ## ---
 ## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1</code></pre>
+<p>How much variability is explained by the year (partial R2)</p>
+<pre class="r"><code>partial.r2(m_reg_y_Anova, &quot;Year_fac&quot;)</code></pre>
+<pre><code>## [1] 0.8003103</code></pre>
 <p>post-hoc test</p>
 <pre class="r"><code>p_m_reg_y&lt;-tukey_plotter(m_reg_y, data_regional, &quot;Region&quot;, &quot;Year_fac&quot;)
 ggsave(plot=p_m_reg_y, filename=file.path(save_dir, &quot;Temp_region_year_model.png&quot;), device=&quot;png&quot;, height=12, width=15, units=&quot;in&quot;)
@@ -392,6 +403,9 @@ m_seas_d_Anova</code></pre>
 ## Residuals  112.53 170                       
 ## ---
 ## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1</code></pre>
+<p>How much variability is explained by the Drought index (partial R2)</p>
+<pre class="r"><code>partial.r2(m_seas_d_Anova, &quot;Drought&quot;)</code></pre>
+<pre><code>## [1] 0.1059843</code></pre>
 <p>post-hoc test</p>
 <pre class="r"><code>p_m_seas_d&lt;-tukey_plotter(m_seas_d, data_seasonal, &quot;Season&quot;, &quot;Drought&quot;)
 ggsave(plot=p_m_seas_d, filename=file.path(save_dir, &quot;Temp_season_drought_model.png&quot;), device=&quot;png&quot;, height=10, width=7, units=&quot;in&quot;)
@@ -417,6 +431,9 @@ m_seas_y_Anova</code></pre>
 ## Residuals   64.12 126                        
 ## ---
 ## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1</code></pre>
+<p>How much variability is explained by the year (partial R2)</p>
+<pre class="r"><code>partial.r2(m_seas_y_Anova, &quot;Year_fac&quot;)</code></pre>
+<pre><code>## [1] 0.4905628</code></pre>
 <p>post-hoc test</p>
 <pre class="r"><code>p_m_seas_y&lt;-tukey_plotter(m_seas_y, data_seasonal, &quot;Season&quot;, &quot;Year_fac&quot;)
 ggsave(plot=p_m_seas_y, filename=file.path(save_dir, &quot;Temp_season_year_model.png&quot;), device=&quot;png&quot;, height=12, width=15, units=&quot;in&quot;)

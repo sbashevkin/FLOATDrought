@@ -113,6 +113,11 @@ tukey_plotter<-function(model, data, data_type, model_type){
   
   return(out)
 }
+
+partial.r2<-function(ANOVA, factor){
+  r2<-ANOVA[factor, "Sum Sq"]/(ANOVA[factor, "Sum Sq"]+ ANOVA["Residuals", "Sum Sq"])
+  return(r2)
+}
 ```
 
 # Load data
@@ -203,6 +208,11 @@ m_reg_d_Anova<-Anova(m_reg_d, type=2)
 m_reg_d_Anova
 ```
 
+How much variability is explained by the Drought index (partial R2)
+```{r}
+partial.r2(m_reg_d_Anova, "Drought")
+```
+
 post-hoc test
 
 ```{r, fig.width=12, fig.height=12}
@@ -228,6 +238,11 @@ Check results
 ```{r}
 m_reg_y_Anova<-Anova(m_reg_y, type=2)
 m_reg_y_Anova
+```
+
+How much variability is explained by the year (partial R2)
+```{r}
+partial.r2(m_reg_y_Anova, "Year_fac")
 ```
 
 post-hoc test
@@ -259,6 +274,11 @@ m_seas_d_Anova<-Anova(m_seas_d, type=2)
 m_seas_d_Anova
 ```
 
+How much variability is explained by the Drought index (partial R2)
+```{r}
+partial.r2(m_seas_d_Anova, "Drought")
+```
+
 post-hoc test
 
 ```{r, fig.width=12, fig.height=12}
@@ -284,6 +304,11 @@ Check results
 ```{r}
 m_seas_y_Anova<-Anova(m_seas_y, type=2)
 m_seas_y_Anova
+```
+
+How much variability is explained by the year (partial R2)
+```{r}
+partial.r2(m_seas_y_Anova, "Year_fac")
 ```
 
 post-hoc test
