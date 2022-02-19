@@ -1,0 +1,235 @@
+---
+title: "Zooplankton salinity relationships in Suisun"
+author: "Sam Bashevkin"
+date: "2/17/2022"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+knit: (function(input, ...) {
+    rmarkdown::render(
+      input,
+      output_dir = 'docs',
+      envir = globalenv()
+    )
+    })
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Load packages
+```{r, message=FALSE}
+require(dplyr)
+require(zooper)
+require(lubridate)
+require(readr)
+require(tidyr)
+require(ggplot2)
+require(sf)
+require(readxl)
+require(stringr)
+require(mgcv)
+require(purrr)
+```
+
+Load zoop data
+```{r}
+zoop_data<-Zoopsynther(Data_type="Community", Sources=c("EMP", "STN", "20mm", "FMWT"), Time_consistency = TRUE)
+```
+
+
+Read in zoop mass conversions
+```{r}
+zoop_mass_conversions<-read_excel("~/ZoopSynth/Data paper/Biomass conversions.xlsx", sheet="Micro and Meso-zooplankton")%>%
+  mutate(Taxname=case_when(Taxname=="Sinocalanus"~"Sinocalanus doerrii",
+                           TRUE ~ Taxname),
+         Lifestage=recode(Lifestage, Larvae="Larva"),
+         Taxlifestage=paste(Taxname, Lifestage))%>%
+  select(Taxlifestage, CarbonWeight_ug)
+```
+
+Read in zoop groupings
+```{r}
+zoop_groups<-read_csv("Data/zoopcrosswalk2.csv", col_types=cols_only(Taxlifestage="c", IBMR="c"))%>%
+  distinct()
+```
+
+
+Load Mysid biomass data
+```{r}
+zoop_mysid<-read_excel("Data/1972-2020MysidBPUEMatrix.xlsx",
+                       sheet="Mysid_BPUE_matrix_1972-2020", na = "NA",
+                       col_types = c(rep("numeric", 4), "date", "text", "text", rep("text", 7), rep("numeric", 8)))%>%
+  select(Date=SampleDate, Station=StationNZ, BPUE=`Hyperacanthomysis longirostris`)%>%
+  mutate(BPUE_mysid=BPUE*1000, # Convert to ug
+         SampleID=paste("EMP", Station, Date),
+         Taxlifestage="Hyperacanthomysis longirostris Adult",
+         SizeClass="Macro")%>%
+  select(SampleID, Taxlifestage, SizeClass, BPUE_mysid)
+```
+
+
+Start processing the zoop data
+```{r}
+zoop_data_mass<-zoop_data%>%
+  mutate(Taxlifestage=str_remove(Taxlifestage, fixed("_UnID")))%>%
+  filter(
+    !(SizeClass=="Meso" & #eliminating species which are counted in meso and micro and retained better in the micro net from the meso calcs
+        
+        Taxlifestage%in%c("Asplanchna Adult", "Copepoda Larva","Cyclopoida Juvenile", "Eurytemora Larva", "Harpacticoida Undifferentiated",
+                          "Keratella Adult", "Limnoithona Adult", "Limnoithona Juvenile", "Limnoithona sinenesis Adult", "Limnoithona tetraspina
+                                    Adult", "Oithona Adult", "Oithona Juvenile", "Oithona davisae Adult", "Polyarthra Adult","Pseudodiaptomus Larva", 
+                          "Rotifera Adult", "Sinocalanus doerrii Larva", "Synchaeta Adult", "Synchaeta bicornis Adult", "Trichocerca Adult")) &
+      
+      !(SizeClass=="Micro" &Taxlifestage%in%c("Cirripedia Larva", "Cyclopoida Adult", "Oithona similis")) & #removing categories better retained in meso net from micro net matrix
+      Order!="Amphipoda" &
+      (Order!="Mysida" | Taxlifestage=="Hyperacanthomysis longirostris Adult"))%>%
+  mutate(Taxlifestage=recode(Taxlifestage, `Synchaeta bicornis Adult`="Synchaeta Adult",
+                             `Pseudodiaptomus Adult`="Pseudodiaptomus forbesi Adult",
+                             `Acanthocyclops vernalis Adult`="Acanthocyclops Adult"))%>%
+  left_join(zoop_mass_conversions, by="Taxlifestage")%>%
+  left_join(zoop_mysid, by=c("SampleID", "Taxlifestage", "SizeClass"))%>%
+  left_join(zoop_groups, by="Taxlifestage")%>%
+  mutate(BPUE=if_else(Taxlifestage=="Hyperacanthomysis longirostris Adult", BPUE_mysid, CPUE*CarbonWeight_ug))%>%
+  filter(!is.na(BPUE) & !is.na(Latitude) & !is.na(Longitude) & !is.na(SalSurf))%>% # Removes any data without BPUE, which is currently restricted to Decapod Larvae, and H. longirostris from STN. Also removes 20mm and EMP EZ stations without coordinates
+  group_by(IBMR)%>%
+  mutate(flag=if_else(all(c("Micro", "Meso")%in%SizeClass), "Remove", "Keep"))%>% # This and the next 2 lines are meant to ensure that all categories are consistent across the surveys. Since only EMP samples microzoops, only EMP data can be used for categories that include both micro and mesozoops.
+  ungroup()%>%
+  filter(!(flag=="Remove" & Source!="EMP"))%>%
+  select(SampleID, Station, Latitude, Longitude, SalSurf, Date, Year, IBMR, BPUE)%>%
+  group_by(across(-BPUE))%>%
+  summarise(BPUE=sum(BPUE), .groups="drop")%>%
+  st_as_sf(coords=c("Longitude", "Latitude"), crs=4326)%>%
+  st_transform(crs=st_crs(deltamapr::R_EDSM_Subregions_Mahardja))%>%
+  st_join(deltamapr::R_EDSM_Subregions_Mahardja%>%
+            select(SubRegion))%>%
+  st_drop_geometry()%>%
+  filter(SubRegion=="Suisun Marsh")%>%
+  mutate(doy=yday(Date),
+         Year_fac=factor(Year),
+         Station_fac=factor(Station),
+         BPUE_log1p=log(BPUE+1))
+```
+
+Set up models
+```{r}
+newdata<-expand_grid(date=mdy(paste(1:12, 15, 2001, sep="/")),
+                     SalSurf=seq(min(round(zoop_data_mass$SalSurf), 1), 
+                                 round(max(zoop_data_mass$SalSurf), 1), by=0.1))%>%
+  mutate(Month=month(date),
+         doy=yday(date),
+         Year_fac="2010",
+         Station_fac="NZ032")%>%
+  select(Month, doy, Year_fac, Station_fac, SalSurf)
+```
+
+
+model
+```{r}
+sal_model<-function(group){
+  par(mfrow=c(2,2))
+  cat("<<<<<<<<<<<<<<<<<<<<<<< modeling", group, ">>>>>>>>>>>>>>>>>>>>>>>>>\n\n")
+  
+  model<-gam(BPUE_log1p ~ te(SalSurf, doy, k=c(5,5), bs=c("cs", "cc")) + 
+               s(Year_fac, bs="re") + s(Station_fac, bs="re"),
+             data=filter(zoop_data_mass, IBMR==group & Year>=2000), 
+             method="REML")
+  
+  cat("-------------gam check-------------\n")
+  gam.check(model)
+  
+  cat("\n\n-------------summary-------------\n")
+  print(summary(model))
+  
+  sal<-predict(model, type="terms", terms="te(SalSurf,doy)", newdata=newdata, se.fit=T)%>%
+    as_tibble()%>%
+    mutate(across(everything(), as.vector))%>%
+    rename(fit=starts_with("fit"), se=starts_with("se.fit"))%>%
+    bind_cols(newdata%>%
+                select(-Year_fac, -Station_fac), 
+              .)
+  
+  out<-list(model=model, sal=sal)
+  return(out)
+}
+```
+
+Apply model to all groups
+```{r}
+sal_models<-map(set_names(unique(zoop_data_mass$IBMR)), sal_model)
+```
+
+Extract salinity conversions
+```{r}
+sal_conversions<-map_dfr(sal_models, ~.x[["sal"]], .id = "IBMR")
+
+str(sal_conversions)
+```
+
+plot salinity conversions
+```{r}
+ggplot(sal_conversions, aes(x=SalSurf, y=fit, ymin=fit-se, ymax=fit+se, fill=IBMR))+
+  geom_ribbon(alpha=0.4)+
+  facet_wrap(~Month)+
+  scale_fill_viridis_d()+
+  theme_bw()
+```
+
+
+salinity conversion function
+```{r}
+sal_fix<-function(data, sal_conversions, sal_target="4"){
+  
+  sal_conversions<-sal_conversions%>%
+    group_by(IBMR, Month)%>%
+    mutate(SalSurf=as.character(SalSurf),
+           Correction=fit[which(SalSurf==sal_target)]-fit)%>%
+    select(IBMR, Month, SalSurf, Correction)
+  
+  sals<-unique(sal_conversions$SalSurf)
+  
+  data<-data%>%
+    mutate(Sal_merge=as.character(round(SalSurf, 1)))
+  
+  outrange<-setdiff(data$Sal_merge, sals)
+  
+  if(length(outrange)>0){
+    cat("Some salinities are out of range for the prediction. They are:", sort(outrange))
+  }
+  
+  data<-data%>%
+    left_join(sal_conversions, by=c("Month", "Sal_merge"="SalSurf", "IBMR"))%>%
+    mutate(BPUE_adj=BPUE+Correction)
+  
+  return(data)
+}
+```
+
+Test the conversion function
+
+```{r}
+test_data<-zoop_data_mass%>%
+  filter(Year==2005)%>%
+  mutate(Month=month(Date))%>%
+  select(SalSurf, Month, IBMR, BPUE)
+
+sal_fix(test_data, sal_conversions)
+```
+
+
+Bayesian version
+```{r, echo=FALSE, include=FALSE, eval=FALSE}
+iterations <- 5e3
+warmup <- iterations/4
+
+m_mysid_brms<-brm(BPUE ~ t2(SalSurf, doy, k=c(5,5), bs=c("cs", "cc")) + (1|Year_fac) + (1|Station_fac),
+                  data=filter(zoop_data_mass, IBMR=="mysid"), family=hurdle_lognormal(),
+                  prior=prior(normal(0,10), class="Intercept")+
+                    prior(cauchy(0,5), class="sigma"),
+                  chains=1, cores=1, control=list(adapt_delta=0.999, max_treedepth=15),
+                  iter = iterations, warmup = warmup,
+                  backend = "cmdstanr", threads = threading(5))
+```
+
