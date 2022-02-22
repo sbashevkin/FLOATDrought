@@ -63,10 +63,16 @@ zoop_mysid<-read_excel("Data/1972-2020MysidBPUEMatrix.xlsx",
                        sheet="Mysid_BPUE_matrix_1972-2020", na = "NA",
                        col_types = c(rep("numeric", 4), "date", "text", "text", rep("text", 7), rep("numeric", 8)))%>%
   select(Date=SampleDate, Station=StationNZ, BPUE=`Hyperacanthomysis longirostris`)%>%
-  mutate(BPUE_mysid=BPUE*1000, # Convert to ug
-         SampleID=paste("EMP", Station, Date),
-         Taxlifestage="Hyperacanthomysis longirostris Adult",
-         SizeClass="Macro")%>%
+  mutate(Source="EMP")%>%
+  bind_rows(read_csv("Data/FMWT STN 2007to2019 Mysid BPUE.csv", 
+                     col_types=cols_only(Station="c", SampleDate="c", Project="c", `Hyperacanthomysis longirostris`="d"))%>%
+              rename(Date=SampleDate, Source=Project, BPUE=`Hyperacanthomysis longirostris`)%>%
+              mutate(Date=mdy(Date),
+                     Station=recode(Station, MONT="Mont", HONK="Honk")))%>%
+mutate(BPUE_mysid=BPUE*1000, # Convert to ug
+       Taxlifestage="Hyperacanthomysis longirostris Adult",
+       SampleID=paste(Source, Station, Date),
+       SizeClass="Macro")%>%
   select(SampleID, Taxlifestage, SizeClass, BPUE_mysid)
 ```
 
