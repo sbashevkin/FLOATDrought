@@ -190,7 +190,6 @@ require(purrr)</code></pre>
 <pre class="r"><code>zoop_mass_conversions&lt;-read_excel(&quot;~/ZoopSynth/Data paper/Biomass conversions.xlsx&quot;, sheet=&quot;Micro and Meso-zooplankton&quot;)%&gt;%
   mutate(Taxname=case_when(Taxname==&quot;Sinocalanus&quot;~&quot;Sinocalanus doerrii&quot;,
                            TRUE ~ Taxname),
-         Lifestage=recode(Lifestage, Larvae=&quot;Larva&quot;),
          Taxlifestage=paste(Taxname, Lifestage))%&gt;%
   select(Taxlifestage, CarbonWeight_ug)</code></pre>
 <p>Read in zoop groupings</p>
@@ -250,7 +249,9 @@ mutate(BPUE_mysid=BPUE*1000, # Convert to ug
   mutate(doy=yday(Date),
          Year_fac=factor(Year),
          Station_fac=factor(Station),
-         BPUE_log1p=log(BPUE+1))</code></pre>
+         BPUE_log1p=log(BPUE+1))
+
+write_csv(zoop_data_mass, &quot;Outputs/zoop_data_mass.csv&quot;)</code></pre>
 <p>Set up models</p>
 <pre class="r"><code>newdata&lt;-expand_grid(date=mdy(paste(1:12, 15, 2001, sep=&quot;/&quot;)),
                      SalSurf=seq(min(round(zoop_data_mass$SalSurf), 1), 
@@ -305,7 +306,7 @@ mutate(BPUE_mysid=BPUE*1000, # Convert to ug
 ## indicate that k is too low, especially if edf is close to k&#39;.
 ## 
 ##                    k&#39;   edf k-index p-value
-## te(SalSurf,doy) 19.00 15.23    0.99    0.32
+## te(SalSurf,doy) 19.00 15.23    0.99    0.35
 ## s(Year_fac)     21.00 19.18      NA      NA
 ## s(Station_fac)   8.00  5.67      NA      NA
 ## 
@@ -445,7 +446,7 @@ mutate(BPUE_mysid=BPUE*1000, # Convert to ug
 ## indicate that k is too low, especially if edf is close to k&#39;.
 ## 
 ##                    k&#39;   edf k-index p-value
-## te(SalSurf,doy) 19.00 16.06    0.99    0.25
+## te(SalSurf,doy) 19.00 16.06    0.99    0.34
 ## s(Year_fac)     21.00 17.61      NA      NA
 ## s(Station_fac)   8.00  5.78      NA      NA
 ## 
@@ -490,10 +491,10 @@ mutate(BPUE_mysid=BPUE*1000, # Convert to ug
 ## Basis dimension (k) checking results. Low p-value (k-index&lt;1) may
 ## indicate that k is too low, especially if edf is close to k&#39;.
 ## 
-##                    k&#39;   edf k-index p-value    
-## te(SalSurf,doy) 19.00 16.52    0.95  &lt;2e-16 ***
-## s(Year_fac)     21.00 15.81      NA      NA    
-## s(Station_fac)   8.00  6.49      NA      NA    
+##                    k&#39;   edf k-index p-value   
+## te(SalSurf,doy) 19.00 16.52    0.95    0.01 **
+## s(Year_fac)     21.00 15.81      NA      NA   
+## s(Station_fac)   8.00  6.49      NA      NA   
 ## ---
 ## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
 ## 
@@ -539,7 +540,7 @@ mutate(BPUE_mysid=BPUE*1000, # Convert to ug
 ## indicate that k is too low, especially if edf is close to k&#39;.
 ## 
 ##                    k&#39;   edf k-index p-value
-## te(SalSurf,doy) 19.00 12.82    0.99    0.43
+## te(SalSurf,doy) 19.00 12.82    0.99    0.38
 ## s(Year_fac)     21.00 18.29      NA      NA
 ## s(Station_fac)   8.00  5.02      NA      NA
 ## 
@@ -585,7 +586,7 @@ mutate(BPUE_mysid=BPUE*1000, # Convert to ug
 ## indicate that k is too low, especially if edf is close to k&#39;.
 ## 
 ##                    k&#39;   edf k-index p-value  
-## te(SalSurf,doy) 19.00 14.81    0.96    0.02 *
+## te(SalSurf,doy) 19.00 14.81    0.96    0.03 *
 ## s(Year_fac)     21.00 19.11      NA      NA  
 ## s(Station_fac)   8.00  6.13      NA      NA  
 ## ---
@@ -633,7 +634,7 @@ mutate(BPUE_mysid=BPUE*1000, # Convert to ug
 ## indicate that k is too low, especially if edf is close to k&#39;.
 ## 
 ##                       k&#39;      edf k-index p-value
-## te(SalSurf,doy) 1.90e+01 9.99e+00    0.97    0.21
+## te(SalSurf,doy) 1.90e+01 9.99e+00    0.97    0.16
 ## s(Year_fac)     2.10e+01 1.76e+01      NA      NA
 ## s(Station_fac)  2.00e+00 8.36e-04      NA      NA
 ## 
@@ -679,7 +680,7 @@ mutate(BPUE_mysid=BPUE*1000, # Convert to ug
 ## indicate that k is too low, especially if edf is close to k&#39;.
 ## 
 ##                     k&#39;    edf k-index p-value
-## te(SalSurf,doy) 19.000 14.235    1.03    0.78
+## te(SalSurf,doy) 19.000 14.235    1.03     0.8
 ## s(Year_fac)     21.000 10.382      NA      NA
 ## s(Station_fac)   2.000  0.976      NA      NA
 ## 
@@ -725,7 +726,7 @@ mutate(BPUE_mysid=BPUE*1000, # Convert to ug
 ## indicate that k is too low, especially if edf is close to k&#39;.
 ## 
 ##                    k&#39;   edf k-index p-value
-## te(SalSurf,doy) 19.00 14.46    0.99    0.46
+## te(SalSurf,doy) 19.00 14.46    0.99    0.47
 ## s(Year_fac)     21.00 17.82      NA      NA
 ## s(Station_fac)   7.00  5.37      NA      NA
 ## 
@@ -762,7 +763,7 @@ mutate(BPUE_mysid=BPUE*1000, # Convert to ug
 <pre><code>## 
 ## Method: REML   Optimizer: outer newton
 ## full convergence after 8 iterations.
-## Gradient range [-2.702327e-07,1.55467e-07]
+## Gradient range [-2.702328e-07,1.55467e-07]
 ## (score 782.3076 &amp; scale 1.203446).
 ## Hessian positive definite, eigenvalue range [0.4770945,247.7022].
 ## Model rank =  43 / 43 
@@ -771,7 +772,7 @@ mutate(BPUE_mysid=BPUE*1000, # Convert to ug
 ## indicate that k is too low, especially if edf is close to k&#39;.
 ## 
 ##                     k&#39;    edf k-index p-value
-## te(SalSurf,doy) 19.000 13.529    0.94    0.15
+## te(SalSurf,doy) 19.000 13.529    0.94    0.17
 ## s(Year_fac)     21.000 10.270      NA      NA
 ## s(Station_fac)   2.000  0.978      NA      NA
 ## 
@@ -817,7 +818,7 @@ mutate(BPUE_mysid=BPUE*1000, # Convert to ug
 ## indicate that k is too low, especially if edf is close to k&#39;.
 ## 
 ##                       k&#39;      edf k-index p-value
-## te(SalSurf,doy) 1.90e+01 1.19e+01    0.99    0.39
+## te(SalSurf,doy) 1.90e+01 1.19e+01    0.99    0.40
 ## s(Year_fac)     2.10e+01 1.58e+01      NA      NA
 ## s(Station_fac)  2.00e+00 7.15e-04      NA      NA
 ## 
@@ -912,7 +913,6 @@ sal_fix(test_data, sal_conversions)</code></pre>
 ##  9  0.575      4 daphnia    42.0  0.6          -1.66     40.4  
 ## 10  0.575      4 eurytem   261.   0.6          -0.475   261.   
 ## # ... with 546 more rows</code></pre>
-<p>Bayesian version</p>
 
 
 

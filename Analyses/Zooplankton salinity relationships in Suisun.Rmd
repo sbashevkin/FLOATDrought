@@ -45,7 +45,6 @@ Read in zoop mass conversions
 zoop_mass_conversions<-read_excel("~/ZoopSynth/Data paper/Biomass conversions.xlsx", sheet="Micro and Meso-zooplankton")%>%
   mutate(Taxname=case_when(Taxname=="Sinocalanus"~"Sinocalanus doerrii",
                            TRUE ~ Taxname),
-         Lifestage=recode(Lifestage, Larvae="Larva"),
          Taxlifestage=paste(Taxname, Lifestage))%>%
   select(Taxlifestage, CarbonWeight_ug)
 ```
@@ -117,6 +116,8 @@ zoop_data_mass<-zoop_data%>%
          Year_fac=factor(Year),
          Station_fac=factor(Station),
          BPUE_log1p=log(BPUE+1))
+
+write_csv(zoop_data_mass, "Outputs/zoop_data_mass.csv")
 ```
 
 Set up models
