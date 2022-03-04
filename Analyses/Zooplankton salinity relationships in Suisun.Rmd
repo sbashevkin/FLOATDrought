@@ -223,19 +223,3 @@ test_data<-zoop_data_mass%>%
 
 sal_fix(test_data, sal_conversions)
 ```
-
-
-Bayesian version
-```{r, echo=FALSE, include=FALSE, eval=FALSE}
-iterations <- 5e3
-warmup <- iterations/4
-
-m_mysid_brms<-brm(BPUE ~ t2(SalSurf, doy, k=c(5,5), bs=c("cs", "cc")) + (1|Year_fac) + (1|Station_fac),
-                  data=filter(zoop_data_mass, IBMR=="mysid"), family=hurdle_lognormal(),
-                  prior=prior(normal(0,10), class="Intercept")+
-                    prior(cauchy(0,5), class="sigma"),
-                  chains=1, cores=1, control=list(adapt_delta=0.999, max_treedepth=15),
-                  iter = iterations, warmup = warmup,
-                  backend = "cmdstanr", threads = threading(5))
-```
-
