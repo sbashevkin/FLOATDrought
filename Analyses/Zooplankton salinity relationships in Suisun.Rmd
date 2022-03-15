@@ -1,7 +1,7 @@
 ---
 title: "Zooplankton salinity relationships in Suisun"
 author: "Sam Bashevkin"
-date: "2/17/2022"
+date: "3/15/2022"
 output: html_document
 editor_options: 
   chunk_output_type: console
@@ -17,6 +17,7 @@ knit: (function(input, ...) {
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+options(scipen=999)
 ```
 
 Load packages
@@ -184,18 +185,65 @@ ggplot(sal_conversions, aes(x=SalSurf, y=fit, ymin=fit-se, ymax=fit+se, fill=IBM
   theme_bw()
 ```
 
+Load in SMSCG modeled salinity
+```{r}
+SMSCG_sal<-read_csv("Data/SMSCG salinity modeling/bdl_summer_fall_2022_psu_filtered.csv", skip = 10)%>%
+  mutate(Month=month(datetime))%>%
+  drop_na()%>%
+  group_by(Month)%>%
+  summarise(across(contains("_bn_"), ~round(mean(.x), 1)))
+```
+
+Plot SMSCG modeld salinity
+```{r}
+ggplot(pivot_longer(SMSCG_sal, cols=contains("_bn_"), names_to="Scenario", values_to="Salinity"), aes(x=Month, y=Salinity, color=Scenario))+
+  geom_line()+
+  scale_color_viridis_d()+
+  scale_x_continuous(breaks=1:12)+
+  theme_bw()
+```
+
 
 salinity conversion function
 ```{r}
-sal_fix<-function(data, sal_conversions, sal_target="4"){
+sal_fix<-function(data, sal_conversions, sal_target, target_column, months){
   
-  sal_conversions<-sal_conversions%>%
-    group_by(IBMR, Month)%>%
-    mutate(SalSurf=as.character(SalSurf),
-           Correction=fit[which(SalSurf==sal_target)]-fit)%>%
+  salinity_conversions<-sal_conversions%>%
+    filter(Month%in%months)%>% ## November is not included in the salinity target
+    mutate(SalSurf=as.character(SalSurf))%>%
+    select(IBMR, Month, SalSurf, fit)
+  
+  target_outside<-setdiff(as.character(sal_target[[target_column]]), salinity_conversions$SalSurf)
+  
+  if(length(target_outside)>0){
+    cat("Some target salinities are out of range for the prediction. They are:", sort(target_outside))
+  }
+  
+  sal_conversions_target<-salinity_conversions%>%
+    semi_join(sal_target%>%
+                mutate(SalSurf=as.character(.data[[target_column]])), 
+              by=c("Month", "SalSurf"))%>%
+    select(IBMR, Month, fit_target=fit)
+    
+  if(any(duplicated(paste(sal_conversions_target$Month, sal_conversions_target$IBMR)))){
+    stop("sal_conversions were duplicated in filtering out the target salinities")
+  }
+  
+  #Make sure all months are present for each IBMR
+  monthcheck<-sal_conversions_target%>%
+    group_by(IBMR)%>%
+    summarise(N=n_distinct(Month))
+  
+  if(any(monthcheck$N!=length(months))){
+    stop("Some months are missing in the sal_target")
+  }
+  
+  salinity_conversions_correction<-salinity_conversions%>%
+    left_join(sal_conversions_target, by=c("IBMR", "Month"))%>%
+    mutate(Correction=fit_target-fit)%>%
     select(IBMR, Month, SalSurf, Correction)
   
-  sals<-unique(sal_conversions$SalSurf)
+  sals<-unique(salinity_conversions_correction$SalSurf)
   
   data<-data%>%
     mutate(Sal_merge=as.character(round(SalSurf, 1)))
@@ -207,20 +255,93 @@ sal_fix<-function(data, sal_conversions, sal_target="4"){
   }
   
   data<-data%>%
-    left_join(sal_conversions, by=c("Month", "Sal_merge"="SalSurf", "IBMR"))%>%
+    left_join(salinity_conversions_correction, by=c("Month", "Sal_merge"="SalSurf", "IBMR"))%>%
     mutate(BPUE_adj=BPUE+Correction)
   
   return(data)
 }
 ```
 
-Test the conversion function
-
+Prepare data for conversion
 ```{r}
-test_data<-zoop_data_mass%>%
-  filter(Year==2005)%>%
-  mutate(Month=month(Date))%>%
-  select(SalSurf, Month, IBMR, BPUE)
+# From Rosie:
+#Calculate water year function
+wtr_yr <- function(dates, start_month=12) {
+  # Convert dates into POSIXlt
+  dates.posix = as.POSIXlt(dates)
+  # Year offset
+  offset = ifelse(dates.posix$mon == start_month - 1, 1, 0)
+  # Water year
+  adj.year = dates.posix$year + 1900 + offset
+  # Return the water year
+  adj.year
+}
 
-sal_fix(test_data, sal_conversions)
+year_types<-read_csv(url("https://raw.githubusercontent.com/rosehartman/DCGmodeling/main/yeartypes.csv"))%>%
+  rename(Yearadj = Year)
+
+months<-c(6,7,8,9,10)
+
+zoop_data_mass_bn<-zoop_data_mass%>%
+  mutate(Yearadj = wtr_yr(Date),
+         Month=month(Date)) %>%
+  filter(Year > 2000)%>%
+  left_join(year_types) %>%
+  filter(Yr_type == "Below Normal" & Month %in% months)%>%
+  select(Date, Month, Year, SalSurf, IBMR, BPUE)
 ```
+
+
+Apply the conversion function
+```{r}
+zoop_corrected<-map(set_names(c("bdl_bn_noact", "bdl_bn_smscg4", "bdl_bn_smscg6")), ~sal_fix(zoop_data_mass_bn, sal_conversions, SMSCG_sal, .x, months))%>%
+  bind_rows(.id="Scenario")
+```
+
+### We're getting negative BPUEs and some NA BPUEs in the adjusted values
+
+Plot the result
+```{r}
+ggplot(zoop_corrected, aes(x=Date, y=BPUE_adj, color=Scenario))+
+  geom_point()+
+  scale_y_continuous(trans="log1p", breaks = c(0, 10^(1:6)))+
+  facet_wrap(~IBMR, scales="free")+
+  theme_bw()
+```
+
+Plot BPUE vs BPUE_adj
+```{r}
+ggplot(zoop_corrected, aes(x=BPUE, y=BPUE_adj, color=Scenario))+
+  geom_point()+
+  scale_y_continuous(trans="log1p", breaks = c(0, 10^(1:6)))+
+  scale_x_continuous(trans="log1p", breaks = c(0, 10^(1:6)))+
+  facet_wrap(~IBMR, scales="free")+
+  theme_bw()
+```
+
+Plot BPUE vs correction
+```{r}
+ggplot(zoop_corrected, aes(x=BPUE, y=Correction, color=Scenario))+
+  geom_point()+
+  geom_hline(yintercept=0)+
+  xlab("BPUE (on log(x+1) scale)")+
+  scale_x_continuous(trans="log1p", breaks = c(0, 10^(1:6)))+
+  facet_wrap(~IBMR, scales="free")+
+  theme_bw()
+```
+
+Summarise zoops by IBMR, scenario, and month
+```{r}
+zoop_bn_sum<-zoop_corrected%>%
+  group_by(IBMR, Month, Scenario)%>%
+  summarise(BPUE_sum=sum(BPUE_adj), .groups="drop")
+```
+
+Plot summarized CPUE
+```{r}
+ggplot(zoop_bn_sum, aes(x=Month, y=BPUE_sum, color=Scenario))+
+  geom_point(alpha=0.4)+
+  facet_wrap(~IBMR, scales="free")+
+  theme_bw()
+```
+
