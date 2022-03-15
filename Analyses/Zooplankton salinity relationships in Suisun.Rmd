@@ -44,7 +44,7 @@ zoop_data<-Zoopsynther(Data_type="Community", Sources=c("EMP", "STN", "20mm", "F
 Read in zoop mass conversions
 ```{r}
 zoop_mass_conversions<-read_excel("~/ZoopSynth/Data paper/Biomass conversions.xlsx", sheet="Micro and Meso-zooplankton")%>%
-  mutate(Taxname=case_when(Taxname=="Sinocalanus"~"Sinocalanus doerrii",
+  mutate(Taxname=case_when(Taxname=="Sinocalanus"~"Sinocalanus doerrii", # Change to help this match to zoop data
                            TRUE ~ Taxname),
          Taxlifestage=paste(Taxname, Lifestage))%>%
   select(Taxlifestage, CarbonWeight_ug)
@@ -59,20 +59,20 @@ zoop_groups<-read_csv("Data/zoopcrosswalk2.csv", col_types=cols_only(Taxlifestag
 
 Load Mysid biomass data
 ```{r}
-zoop_mysid<-read_excel("Data/1972-2020MysidBPUEMatrix.xlsx",
+zoop_mysid<-read_excel("Data/1972-2020MysidBPUEMatrix.xlsx", # EMP
                        sheet="Mysid_BPUE_matrix_1972-2020", na = "NA",
                        col_types = c(rep("numeric", 4), "date", "text", "text", rep("text", 7), rep("numeric", 8)))%>%
-  select(Date=SampleDate, Station=StationNZ, BPUE=`Hyperacanthomysis longirostris`)%>%
+  select(Date=SampleDate, Station=StationNZ, BPUE=`Hyperacanthomysis longirostris`)%>% # Only select Hyperacanthomysis longirostris
   mutate(Source="EMP")%>%
-  bind_rows(read_csv("Data/FMWT STN 2007to2019 Mysid BPUE.csv", 
-                     col_types=cols_only(Station="c", SampleDate="c", Project="c", `Hyperacanthomysis longirostris`="d"))%>%
-              rename(Date=SampleDate, Source=Project, BPUE=`Hyperacanthomysis longirostris`)%>%
+  bind_rows(read_csv("Data/FMWT STN 2007to2019 Mysid BPUE.csv", # FMWT/STN
+                     col_types=cols_only(Station="c", SampleDate="c", Project="c", `Hyperacanthomysis longirostris`="d"))%>% 
+              rename(Date=SampleDate, Source=Project, BPUE=`Hyperacanthomysis longirostris`)%>% # Only select Hyperacanthomysis longirostris
               mutate(Date=mdy(Date),
-                     Station=recode(Station, MONT="Mont", HONK="Honk")))%>%
-mutate(BPUE_mysid=BPUE*1000, # Convert to ug
-       Taxlifestage="Hyperacanthomysis longirostris Adult",
-       SampleID=paste(Source, Station, Date),
-       SizeClass="Macro")%>%
+                     Station=recode(Station, MONT="Mont", HONK="Honk")))%>% #Get station names to match to main dataset
+  mutate(BPUE_mysid=BPUE*1000, # Convert to ug
+         Taxlifestage="Hyperacanthomysis longirostris Adult",
+         SampleID=paste(Source, Station, Date),
+         SizeClass="Macro")%>%
   select(SampleID, Taxlifestage, SizeClass, BPUE_mysid)
 ```
 
@@ -90,15 +90,15 @@ zoop_data_mass<-zoop_data%>%
                           "Rotifera Adult", "Sinocalanus doerrii Larva", "Synchaeta Adult", "Synchaeta bicornis Adult", "Trichocerca Adult")) &
       
       !(SizeClass=="Micro" &Taxlifestage%in%c("Cirripedia Larva", "Cyclopoida Adult", "Oithona similis")) & #removing categories better retained in meso net from micro net matrix
-      Order!="Amphipoda" &
-      (Order!="Mysida" | Taxlifestage=="Hyperacanthomysis longirostris Adult"))%>%
-  mutate(Taxlifestage=recode(Taxlifestage, `Synchaeta bicornis Adult`="Synchaeta Adult",
+      Order!="Amphipoda" & # Remove amphipods
+      (Order!="Mysida" | Taxlifestage=="Hyperacanthomysis longirostris Adult"))%>% #Only retain Hyperacanthomysis longirostris
+  mutate(Taxlifestage=recode(Taxlifestage, `Synchaeta bicornis Adult`="Synchaeta Adult", # Change some names to match to biomass conversion dataset
                              `Pseudodiaptomus Adult`="Pseudodiaptomus forbesi Adult",
                              `Acanthocyclops vernalis Adult`="Acanthocyclops Adult"))%>%
-  left_join(zoop_mass_conversions, by="Taxlifestage")%>%
-  left_join(zoop_mysid, by=c("SampleID", "Taxlifestage", "SizeClass"))%>%
-  left_join(zoop_groups, by="Taxlifestage")%>%
-  mutate(BPUE=if_else(Taxlifestage=="Hyperacanthomysis longirostris Adult", BPUE_mysid, CPUE*CarbonWeight_ug))%>%
+  left_join(zoop_mass_conversions, by="Taxlifestage")%>% # Add biomass conversions
+  left_join(zoop_mysid, by=c("SampleID", "Taxlifestage", "SizeClass"))%>% # Add mysid biomass
+  left_join(zoop_groups, by="Taxlifestage")%>% # Add IBMR categories
+  mutate(BPUE=if_else(Taxlifestage=="Hyperacanthomysis longirostris Adult", BPUE_mysid, CPUE*CarbonWeight_ug))%>% # Create 1 BPUE variable
   filter(!is.na(BPUE) & !is.na(Latitude) & !is.na(Longitude) & !is.na(SalSurf))%>% # Removes any data without BPUE, which is currently restricted to Decapod Larvae, and H. longirostris from STN. Also removes 20mm and EMP EZ stations without coordinates
   group_by(IBMR)%>%
   mutate(flag=if_else(all(c("Micro", "Meso")%in%SizeClass), "Remove", "Keep"))%>% # This and the next 2 lines are meant to ensure that all categories are consistent across the surveys. Since only EMP samples microzoops, only EMP data can be used for categories that include both micro and mesozoops.
@@ -106,33 +106,35 @@ zoop_data_mass<-zoop_data%>%
   filter(!(flag=="Remove" & Source!="EMP"))%>%
   select(SampleID, Station, Latitude, Longitude, SalSurf, Date, Year, IBMR, BPUE)%>%
   group_by(across(-BPUE))%>%
-  summarise(BPUE=sum(BPUE), .groups="drop")%>%
+  summarise(BPUE=sum(BPUE), .groups="drop")%>% # Sum each IBMR categories
   st_as_sf(coords=c("Longitude", "Latitude"), crs=4326)%>%
-  st_transform(crs=st_crs(deltamapr::R_EDSM_Subregions_Mahardja))%>%
+  st_transform(crs=st_crs(deltamapr::R_EDSM_Subregions_Mahardja))%>% # This and next 4 lines to filter data to Suisun Marsh
   st_join(deltamapr::R_EDSM_Subregions_Mahardja%>%
             select(SubRegion))%>%
   st_drop_geometry()%>%
   filter(SubRegion=="Suisun Marsh")%>%
-  mutate(doy=yday(Date),
-         Year_fac=factor(Year),
-         Station_fac=factor(Station),
-         BPUE_log1p=log(BPUE+1))
+  mutate(doy=yday(Date), #Day of year
+         Year_fac=factor(Year), # Factor year for model random effect
+         Station_fac=factor(Station), # Factor station for model random effect
+         across(c(SalSurf, doy), list(s=~(.x-mean(.x))/sd(.x))), # Center and standardize predictors
+         BPUE_log1p=log(BPUE+1)) # log1p transform BPUE for model
 
-write_csv(zoop_data_mass, "Outputs/zoop_data_mass.csv")
+write_csv(zoop_data_mass, "Outputs/zoop_data_mass.csv") # Save data for Rosie
 ```
 
-Set up models
+Set up prediction data for model
 ```{r}
-newdata<-expand_grid(date=mdy(paste(1:12, 15, 2001, sep="/")),
+newdata<-expand_grid(date=mdy(paste(1:12, 15, 2001, sep="/")), # The 15th of each month on a non-leap year
                      SalSurf=seq(min(round(zoop_data_mass$SalSurf), 1), 
-                                 round(max(zoop_data_mass$SalSurf), 1), by=0.1))%>%
+                                 round(max(zoop_data_mass$SalSurf), 1), by=0.1))%>% # Salinity sequence nicely rounded to 1 decimal
   mutate(Month=month(date),
-         doy=yday(date),
-         Year_fac="2010",
-         Station_fac="NZ032")%>%
-  select(Month, doy, Year_fac, Station_fac, SalSurf)
+         doy=yday(date), # Day of year
+         SalSurf_s=(SalSurf-mean(zoop_data_mass$SalSurf))/sd(zoop_data_mass$SalSurf), # center and standardize salinity to match data
+         doy_s=(doy-mean(zoop_data_mass$doy))/sd(zoop_data_mass$doy), # center and standardize doy to match data
+         Year_fac="2010", # Set arbitrary year (won't be used)
+         Station_fac="NZ032")%>% # Set arbitrary station (won't be used)
+  select(Month, doy, doy_s, Year_fac, Station_fac, SalSurf, SalSurf_s)
 ```
-
 
 model
 ```{r}
@@ -153,11 +155,10 @@ sal_model<-function(group){
   
   sal<-predict(model, type="terms", terms="te(SalSurf,doy)", newdata=newdata, se.fit=T)%>%
     as_tibble()%>%
-    mutate(across(everything(), as.vector))%>%
+    mutate(across(everything(), as.vector))%>% # Make everything tidy
     rename(fit=starts_with("fit"), se=starts_with("se.fit"))%>%
-    #mutate(across(c(fit, se), ~exp(.x)-1))%>%
-    bind_cols(newdata%>%
-                select(-Year_fac, -Station_fac), 
+    bind_cols(newdata%>% # Add covariate columns before these columns
+                select(-Year_fac, -Station_fac, -doy_s, -SalSurf_s), 
               .)
   
   out<-list(model=model, sal=sal)
@@ -198,9 +199,11 @@ SMSCG_sal<-read_csv("Data/SMSCG salinity modeling/bdl_summer_fall_2022_psu_filte
 
 Plot SMSCG modeled salinity
 ```{r}
-ggplot(pivot_longer(SMSCG_sal, cols=contains("_bn_"), names_to="Scenario", values_to="Salinity"), aes(x=Month, y=Salinity, color=Scenario))+
+ggplot(pivot_longer(SMSCG_sal, cols=contains("_bn_"), names_to="Scenario", values_to="Salinity")%>% # Prepare data for easier plotting
+         mutate(Scenario=factor(Scenario, levels=c("bdl_bn_noact", "bdl_bn_smscg6", "bdl_bn_smscg4"))), 
+       aes(x=Month, y=Salinity, color=Scenario))+
   geom_line()+
-  scale_color_viridis_d()+
+  scale_color_viridis_d(direction = -1)+
   scale_x_continuous(breaks=1:12)+
   theme_bw()
 ```
@@ -211,22 +214,24 @@ salinity conversion function
 sal_fix<-function(data, sal_conversions, sal_target, target_column, months){
   
   salinity_conversions<-sal_conversions%>%
-    filter(Month%in%months)%>% ## November is not included in the salinity target
-    mutate(SalSurf=as.character(SalSurf))%>%
+    filter(Month%in%months)%>% ## Only choose the months to be included
+    mutate(SalSurf=as.character(SalSurf))%>% # Change to character for safer joining
     select(IBMR, Month, SalSurf, fit)
   
+  # Are any target salinities outside the range of the model?
   target_outside<-setdiff(as.character(sal_target[[target_column]]), salinity_conversions$SalSurf)
   
   if(length(target_outside)>0){
     cat("Some target salinities are out of range for the prediction. They are:", sort(target_outside))
   }
   
+  # select target salinities from the conversions dataset
   sal_conversions_target<-salinity_conversions%>%
     semi_join(sal_target%>%
                 mutate(SalSurf=as.character(.data[[target_column]])), 
               by=c("Month", "SalSurf"))%>%
     select(IBMR, Month, fit_target=fit)
-    
+  
   if(any(duplicated(paste(sal_conversions_target$Month, sal_conversions_target$IBMR)))){
     stop("sal_conversions were duplicated in filtering out the target salinities")
   }
@@ -240,25 +245,30 @@ sal_fix<-function(data, sal_conversions, sal_target, target_column, months){
     stop("Some months are missing in the sal_target")
   }
   
+  # Set up salinity conversion factors for data and target
   salinity_conversions_correction<-salinity_conversions%>%
-    left_join(sal_conversions_target, by=c("IBMR", "Month"))%>%
-    mutate(Correction=fit_target-fit)%>%
+    left_join(sal_conversions_target, by=c("IBMR", "Month"))%>% # Join targets to full set of conversions
+    mutate(Correction=fit_target-fit)%>% # Calculate correction factor
     select(IBMR, Month, SalSurf, Correction)
   
+  # Pull unique salinities for outrange (to test for any data salinities not present in model)
   sals<-unique(salinity_conversions_correction$SalSurf)
   
+  # Convert salinity to a character rounded to 1 decimal for safer joining
   data<-data%>%
     mutate(Sal_merge=as.character(round(SalSurf, 1)))
   
+  # Are any salinities from the data not present in the model?
   outrange<-setdiff(data$Sal_merge, sals)
   
   if(length(outrange)>0){
     cat("Some salinities are out of range for the prediction. They are:", sort(outrange))
   }
   
+  # Join salinity conversions and calculate adjusted BPUE
   data<-data%>%
     left_join(salinity_conversions_correction, by=c("Month", "Sal_merge"="SalSurf", "IBMR"))%>%
-    mutate(BPUE_adj=exp(BPUE_log1p+Correction)-1)
+    mutate(BPUE_adj=exp(BPUE_log1p+Correction)-1) # Calculate adjusted BPUE and undo the log1p transformation
   
   return(data)
 }
@@ -279,11 +289,14 @@ wtr_yr <- function(dates, start_month=12) {
   adj.year
 }
 
+# Read in water year types
 year_types<-read_csv(url("https://raw.githubusercontent.com/rosehartman/DCGmodeling/main/yeartypes.csv"))%>%
   rename(Yearadj = Year)
 
+# Choose the months to be used
 months<-c(6,7,8,9,10)
 
+# Filter data to what we want to apply salinity conversions to
 zoop_data_mass_bn<-zoop_data_mass%>%
   mutate(Yearadj = wtr_yr(Date),
          Month=month(Date)) %>%
@@ -296,8 +309,8 @@ zoop_data_mass_bn<-zoop_data_mass%>%
 
 Apply the conversion function
 ```{r}
-zoop_corrected<-map(set_names(c("bdl_bn_noact", "bdl_bn_smscg4", "bdl_bn_smscg6")), ~sal_fix(zoop_data_mass_bn, sal_conversions, SMSCG_sal, .x, months))%>%
-  bind_rows(.id="Scenario")
+zoop_corrected<-map_dfr(set_names(c("bdl_bn_noact", "bdl_bn_smscg4", "bdl_bn_smscg6")), ~sal_fix(zoop_data_mass_bn, sal_conversions, SMSCG_sal, .x, months), .id="Scenario")%>%
+  mutate(Scenario=factor(Scenario, levels=c("bdl_bn_noact", "bdl_bn_smscg6", "bdl_bn_smscg4")))
 ```
 
 ### We're getting negative BPUEs and some NA BPUEs in the adjusted values
@@ -307,6 +320,7 @@ Plot the result
 ggplot(zoop_corrected, aes(x=Date, y=BPUE_adj, color=Scenario))+
   geom_point(alpha=0.4)+
   scale_y_continuous(trans="log1p", breaks = c(0, 10^(1:6)))+
+  scale_color_viridis_d(direction = -1)+
   facet_wrap(~IBMR, scales="free")+
   theme_bw()
 ```
@@ -317,6 +331,7 @@ ggplot(zoop_corrected, aes(x=BPUE, y=BPUE_adj, color=Scenario))+
   geom_point(alpha=0.4)+
   scale_y_continuous(trans="log1p", breaks = c(0, 10^(1:6)))+
   scale_x_continuous(trans="log1p", breaks = c(0, 10^(1:6)))+
+  scale_color_viridis_d(direction = -1)+
   facet_wrap(~IBMR, scales="free")+
   theme_bw()
 ```
@@ -334,6 +349,7 @@ Plot summarized CPUE
 ```{r}
 ggplot(zoop_bn_sum, aes(x=Month, y=BPUE_sum, color=Scenario))+
   geom_point(alpha=0.4)+
+  scale_color_viridis_d(direction = -1)+
   facet_wrap(~IBMR, scales="free")+
   theme_bw()
 ```
