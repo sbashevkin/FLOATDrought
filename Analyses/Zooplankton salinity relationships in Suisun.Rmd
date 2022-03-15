@@ -155,6 +155,7 @@ sal_model<-function(group){
     as_tibble()%>%
     mutate(across(everything(), as.vector))%>%
     rename(fit=starts_with("fit"), se=starts_with("se.fit"))%>%
+    #mutate(across(c(fit, se), ~exp(.x)-1))%>%
     bind_cols(newdata%>%
                 select(-Year_fac, -Station_fac), 
               .)
@@ -180,6 +181,7 @@ plot salinity conversions
 ```{r}
 ggplot(sal_conversions, aes(x=SalSurf, y=fit, ymin=fit-se, ymax=fit+se, fill=IBMR))+
   geom_ribbon(alpha=0.4)+
+  ylab("fit (log scale)")+
   facet_wrap(~Month)+
   scale_fill_viridis_d()+
   theme_bw()
@@ -194,7 +196,7 @@ SMSCG_sal<-read_csv("Data/SMSCG salinity modeling/bdl_summer_fall_2022_psu_filte
   summarise(across(contains("_bn_"), ~round(mean(.x), 1)))
 ```
 
-Plot SMSCG modeld salinity
+Plot SMSCG modeled salinity
 ```{r}
 ggplot(pivot_longer(SMSCG_sal, cols=contains("_bn_"), names_to="Scenario", values_to="Salinity"), aes(x=Month, y=Salinity, color=Scenario))+
   geom_line()+
@@ -256,7 +258,7 @@ sal_fix<-function(data, sal_conversions, sal_target, target_column, months){
   
   data<-data%>%
     left_join(salinity_conversions_correction, by=c("Month", "Sal_merge"="SalSurf", "IBMR"))%>%
-    mutate(BPUE_adj=BPUE+Correction)
+    mutate(BPUE_adj=exp(BPUE_log1p+Correction)-1)
   
   return(data)
 }
@@ -288,7 +290,7 @@ zoop_data_mass_bn<-zoop_data_mass%>%
   filter(Year > 2000)%>%
   left_join(year_types) %>%
   filter(Yr_type == "Below Normal" & Month %in% months)%>%
-  select(Date, Month, Year, SalSurf, IBMR, BPUE)
+  select(Date, Month, Year, SalSurf, IBMR, BPUE, BPUE_log1p)
 ```
 
 
@@ -303,7 +305,7 @@ zoop_corrected<-map(set_names(c("bdl_bn_noact", "bdl_bn_smscg4", "bdl_bn_smscg6"
 Plot the result
 ```{r}
 ggplot(zoop_corrected, aes(x=Date, y=BPUE_adj, color=Scenario))+
-  geom_point()+
+  geom_point(alpha=0.4)+
   scale_y_continuous(trans="log1p", breaks = c(0, 10^(1:6)))+
   facet_wrap(~IBMR, scales="free")+
   theme_bw()
@@ -312,19 +314,8 @@ ggplot(zoop_corrected, aes(x=Date, y=BPUE_adj, color=Scenario))+
 Plot BPUE vs BPUE_adj
 ```{r}
 ggplot(zoop_corrected, aes(x=BPUE, y=BPUE_adj, color=Scenario))+
-  geom_point()+
+  geom_point(alpha=0.4)+
   scale_y_continuous(trans="log1p", breaks = c(0, 10^(1:6)))+
-  scale_x_continuous(trans="log1p", breaks = c(0, 10^(1:6)))+
-  facet_wrap(~IBMR, scales="free")+
-  theme_bw()
-```
-
-Plot BPUE vs correction
-```{r}
-ggplot(zoop_corrected, aes(x=BPUE, y=Correction, color=Scenario))+
-  geom_point()+
-  geom_hline(yintercept=0)+
-  xlab("BPUE (on log(x+1) scale)")+
   scale_x_continuous(trans="log1p", breaks = c(0, 10^(1:6)))+
   facet_wrap(~IBMR, scales="free")+
   theme_bw()
@@ -335,6 +326,8 @@ Summarise zoops by IBMR, scenario, and month
 zoop_bn_sum<-zoop_corrected%>%
   group_by(IBMR, Month, Scenario)%>%
   summarise(BPUE_sum=sum(BPUE_adj), .groups="drop")
+
+write_csv(zoop_bn_sum, "Outputs/zoop_salinity_corrected_sum.csv")
 ```
 
 Plot summarized CPUE
