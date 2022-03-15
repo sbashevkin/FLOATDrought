@@ -142,7 +142,7 @@ sal_model<-function(group){
   par(mfrow=c(2,2))
   cat("<<<<<<<<<<<<<<<<<<<<<<< modeling", group, ">>>>>>>>>>>>>>>>>>>>>>>>>\n\n")
   
-  model<-gam(BPUE_log1p ~ te(SalSurf, doy, k=c(5,5), bs=c("cs", "cc")) + 
+  model<-gam(BPUE_log1p ~ te(SalSurf_s, doy_s, k=c(5,5), bs=c("cs", "cc")) + 
                s(Year_fac, bs="re") + s(Station_fac, bs="re"),
              data=filter(zoop_data_mass, IBMR==group & Year>=2000), 
              method="REML")
@@ -153,7 +153,7 @@ sal_model<-function(group){
   cat("\n\n-------------summary-------------\n")
   print(summary(model))
   
-  sal<-predict(model, type="terms", terms="te(SalSurf,doy)", newdata=newdata, se.fit=T)%>%
+  sal<-predict(model, type="terms", terms="te(SalSurf_s,doy_s)", newdata=newdata, se.fit=T)%>%
     as_tibble()%>%
     mutate(across(everything(), as.vector))%>% # Make everything tidy
     rename(fit=starts_with("fit"), se=starts_with("se.fit"))%>%
@@ -312,8 +312,6 @@ Apply the conversion function
 zoop_corrected<-map_dfr(set_names(c("bdl_bn_noact", "bdl_bn_smscg4", "bdl_bn_smscg6")), ~sal_fix(zoop_data_mass_bn, sal_conversions, SMSCG_sal, .x, months), .id="Scenario")%>%
   mutate(Scenario=factor(Scenario, levels=c("bdl_bn_noact", "bdl_bn_smscg6", "bdl_bn_smscg4")))
 ```
-
-### We're getting negative BPUEs and some NA BPUEs in the adjusted values
 
 Plot the result
 ```{r}
