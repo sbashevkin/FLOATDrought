@@ -205,7 +205,8 @@ ggplot(pivot_longer(SMSCG_sal, cols=contains("_bn_"), names_to="Scenario", value
   geom_line()+
   scale_color_viridis_d(direction = -1)+
   scale_x_continuous(breaks=1:12)+
-  theme_bw()
+  theme_bw()+
+  theme(legend.position = "bottom")
 ```
 
 
@@ -314,13 +315,14 @@ zoop_corrected<-map_dfr(set_names(c("bdl_bn_noact", "bdl_bn_smscg4", "bdl_bn_sms
 ```
 
 Plot the result
-```{r}
+```{r, fig.width=12, fig.height=16}
 ggplot(zoop_corrected, aes(x=Date, y=BPUE_adj, color=Scenario))+
   geom_point(alpha=0.4)+
   scale_y_continuous(trans="log1p", breaks = c(0, 10^(1:6)))+
-  scale_color_viridis_d(direction = -1)+
-  facet_wrap(~IBMR, scales="free")+
-  theme_bw()
+  scale_color_viridis_d(direction = -1, end = 0.9)+
+  facet_wrap(~paste(IBMR, Year), scales="free", ncol=5)+
+  theme_bw()+
+  theme(legend.position = "bottom")
 ```
 
 Plot BPUE vs BPUE_adj
@@ -329,26 +331,28 @@ ggplot(zoop_corrected, aes(x=BPUE, y=BPUE_adj, color=Scenario))+
   geom_point(alpha=0.4)+
   scale_y_continuous(trans="log1p", breaks = c(0, 10^(1:6)))+
   scale_x_continuous(trans="log1p", breaks = c(0, 10^(1:6)))+
-  scale_color_viridis_d(direction = -1)+
+  scale_color_viridis_d(direction = -1, end = 0.9)+
   facet_wrap(~IBMR, scales="free")+
-  theme_bw()
+  theme_bw()+
+  theme(legend.position = "bottom")
 ```
 
 Summarise zoops by IBMR, scenario, and month
 ```{r}
 zoop_bn_sum<-zoop_corrected%>%
   group_by(IBMR, Month, Scenario)%>%
-  summarise(BPUE_sum=sum(BPUE_adj), .groups="drop")
+  summarise(BPUE_sum=sum(BPUE_adj), BPUE_sd=sd(BPUE_adj), .groups="drop")
 
 write_csv(zoop_bn_sum, "Outputs/zoop_salinity_corrected_sum.csv")
 ```
 
-Plot summarized CPUE
-```{r}
-ggplot(zoop_bn_sum, aes(x=Month, y=BPUE_sum, color=Scenario))+
-  geom_point(alpha=0.4)+
-  scale_color_viridis_d(direction = -1)+
+Plot summarized CPUE +/- SD
+```{r, fig.width=12, fig.height=12}
+ggplot(zoop_bn_sum, aes(x=Month, y=BPUE_sum, ymin=BPUE_sum-BPUE_sd, ymax=BPUE_sum+BPUE_sd, fill=Scenario))+
+  geom_pointrange(position = position_dodge(width=0.6), shape=21, color="black", size=1)+
+  scale_fill_viridis_d(direction = -1, end = 0.9)+
   facet_wrap(~IBMR, scales="free")+
-  theme_bw()
+  theme_bw()+
+  theme(legend.position = "bottom")
 ```
 
