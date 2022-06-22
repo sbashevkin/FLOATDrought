@@ -22,3 +22,5 @@ knitr::opts_chunk$set(echo = TRUE)
 ## [Temperature analyses](Temperature-analyses.html)
 
 ## [Zooplankton salinity corrections](Zooplankton-salinity-relationships-in-Suisun.html)
+
+## [Seasonal hydrographs](Seasonal-hydrographs.html)
