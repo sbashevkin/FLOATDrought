@@ -39,6 +39,9 @@ d<-DroughtData::raw_hydro_1975_2021%>%
            !leap_year(Year) & doy >=274 ~ doy -273,
            !leap_year(Year) & doy <274 ~ doy + 92
          ))%>%
+  group_by(WY)%>%
+  arrange(wdoy)%>%
+  mutate(across(c(InflowSacR, InflowYolo, InflowEast, InflowTotal, Outflow, Export), list(cum=~cumsum(.x), sum=~sum(.x))))%>%
   left_join(DroughtData::lt_regional%>%
               distinct(YearAdj, SVIndex, YearType, Drought)%>%
               arrange(Drought, YearAdj)%>%
@@ -79,3 +82,16 @@ ggplot(d, aes(x=wdoy, y=InflowTotal, color=Series_year2, group=Series_year2))+
   coord_cartesian(ylim=c(0, NA), expand = FALSE)+
   theme_bw()
 ```
+
+Total cumulative inflow seasonal hydrograph by series_year
+```{r}
+ggplot(d, aes(x=wdoy, y=InflowTotal_cum/InflowTotal_sum, color=Series_year2, group=WY))+
+  geom_line()+
+  facet_grid(Drought~., scales="free_y")+
+  ylab("Cumulative proportional inflow")+
+  scale_color_viridis_d()+
+  coord_cartesian(ylim=c(0, NA), expand = FALSE)+
+  theme_bw()
+```
+
+This shows most clearly how in dry years, after 2+ years of a drought, water managers are more conservative early in the water year, saving up whatever rainfall they can. But in wet years after 2+ years of a wet period, the reservoirs are full and much more water is released earlier in the water year. Neutral years show no pattern, as expected since they represent flip-flopping among year types.
