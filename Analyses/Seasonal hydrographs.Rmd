@@ -61,6 +61,13 @@ d<-DroughtData::raw_hydro_1975_2021%>%
               select(-Lag, -Start),
             by=c("WY"="YearAdj"))%>%
   filter(!is.na(Drought))
+
+# Calculate wdoy for the first day of each month
+wdoy_months<-d%>%
+  mutate(Month=month(Date, label=T))%>%
+  group_by(Month)%>%
+  summarise(day_min=min(wdoy))%>%
+  mutate(month_label=day_min+15)
 ```
 
 Total inflow seasonal hydrograph by year
@@ -78,9 +85,26 @@ Total inflow seasonal hydrograph by series_year
 ggplot(d, aes(x=wdoy, y=InflowTotal, color=Series_year2, group=Series_year2))+
   geom_smooth(method="gam", formula=y~s(x, bs="cs", k=25))+
   facet_grid(Drought~., scales="free_y")+
+  xlab("Water day of year")+
   scale_color_viridis_d()+
+  scale_x_continuous(breaks=c(wdoy_months$day_min, wdoy_months$month_label), labels=c(rep("", 12), as.character(wdoy_months$Month)))+
   coord_cartesian(ylim=c(0, NA), expand = FALSE)+
-  theme_bw()
+  theme_bw()+
+  theme(axis.ticks.x = element_line(color = c(rep("black", 12), rep(NA, 12))))
+```
+
+
+Total inflow seasonal hydrograph by series_year, scaled by summed inflow over the year
+```{r}
+ggplot(d, aes(x=wdoy, y=InflowTotal/InflowTotal_sum, color=Series_year2, group=Series_year2))+
+  geom_smooth(method="gam", formula=y~s(x, bs="cs", k=25))+
+  facet_grid(Drought~.)+
+  xlab("Water day of year")+
+  scale_color_viridis_d()+
+  scale_x_continuous(breaks=c(wdoy_months$day_min, wdoy_months$month_label), labels=c(rep("", 12), as.character(wdoy_months$Month)))+
+  coord_cartesian(ylim=c(0, NA), expand = FALSE)+
+  theme_bw()+
+  theme(axis.ticks.x = element_line(color = c(rep("black", 12), rep(NA, 12))))
 ```
 
 Total cumulative inflow seasonal hydrograph by series_year
@@ -89,9 +113,28 @@ ggplot(d, aes(x=wdoy, y=InflowTotal_cum/InflowTotal_sum, color=Series_year2, gro
   geom_line()+
   facet_grid(Drought~., scales="free_y")+
   ylab("Cumulative proportional inflow")+
+  xlab("Water day of year")+
   scale_color_viridis_d()+
+  scale_x_continuous(breaks=c(wdoy_months$day_min, wdoy_months$month_label), labels=c(rep("", 12), as.character(wdoy_months$Month)))+
   coord_cartesian(ylim=c(0, NA), expand = FALSE)+
-  theme_bw()
+  theme_bw()+
+  theme(axis.ticks.x = element_line(color = c(rep("black", 12), rep(NA, 12))))
 ```
 
 This shows most clearly how in dry years, after 2+ years of a drought, water managers are more conservative early in the water year, saving up whatever rainfall they can. But in wet years after 2+ years of a wet period, the reservoirs are full and much more water is released earlier in the water year. Neutral years show no pattern, as expected since they represent flip-flopping among year types.
+
+
+Same plot as above, but smoothed for each series_year and drought category combo
+```{r}
+ggplot(d, aes(x=wdoy, y=InflowTotal_cum/InflowTotal_sum, color=Series_year2, group=Series_year2))+
+  geom_smooth(method="gam", formula=y~s(x, bs="cs", k=25))+
+  facet_grid(Drought~., scales="free_y")+
+  ylab("Cumulative proportional inflow")+
+  xlab("Water day of year")+
+  scale_color_viridis_d()+
+  scale_x_continuous(breaks=c(wdoy_months$day_min, wdoy_months$month_label), labels=c(rep("", 12), as.character(wdoy_months$Month)))+
+  coord_cartesian(ylim=c(0, NA), expand = FALSE)+
+  theme_bw()+
+  theme(axis.ticks.x = element_line(color = c(rep("black", 12), rep(NA, 12))))
+```
+
