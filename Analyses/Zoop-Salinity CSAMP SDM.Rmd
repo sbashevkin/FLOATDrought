@@ -1,7 +1,7 @@
 ---
-title: "Zooplankton salinity relationships in Suisun"
+title: "Zoop-salinity CSAMP SDM model"
 author: "Sam Bashevkin"
-date: "3/15/2022"
+date: "8/19/2022"
 output: html_document
 editor_options: 
   chunk_output_type: console
@@ -119,7 +119,6 @@ zoop_data_mass<-zoop_data%>%
          across(c(SalSurf, doy), list(s=~(.x-mean(.x))/sd(.x))), # Center and standardize predictors
          BPUE_log1p=log(BPUE+1)) # log1p transform BPUE for model
 
-write_csv(zoop_data_mass, "Outputs/zoop_data_mass.csv") # Save data for Rosie
 ```
 
 Set up prediction data for model
@@ -249,7 +248,7 @@ sal_fix<-function(data, sal_conversions, sal_target, target_column, months){
   # Set up salinity conversion factors for data and target
   salinity_conversions_correction<-salinity_conversions%>%
     left_join(sal_conversions_target, by=c("IBMR", "Month"))%>% # Join targets to full set of conversions
-    mutate(Correction=fit_target-fit)%>% # Calculate correction factor
+    mutate(Correction=(exp(fit_target)-1)/(exp(fit)-1))%>% # Calculate correction factor
     select(IBMR, Month, SalSurf, Correction)
   
   # Pull unique salinities for outrange (to test for any data salinities not present in model)
