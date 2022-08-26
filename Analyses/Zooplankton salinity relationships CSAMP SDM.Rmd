@@ -127,8 +127,10 @@ Check sample size
 ```{r message=FALSE, warning=FALSE}
 zoop_sample_size <- zoop_data_mass %>% mutate(Month=month(Date)) %>%
   group_by(SampleID,Year,Month,SUBREGION,Station) %>% summarise(BPUE=sum(BPUE)) %>% mutate(Samplesize=1) %>%
-  group_by(Year, Month, SUBREGION) %>% summarise(BPUE=mean(BPUE),Samplesize=sum(Samplesize)) %>%
+  group_by(Year, Month, SUBREGION) %>% summarise(mean_BPUE=mean(BPUE),Samplesize=sum(Samplesize)) %>%
   filter(Year>=1995)
+
+write_csv(zoop_sample_size, "Outputs/zoop_data_sample_size_DSIBM.csv") # Save data for Sam to review
 
 ```
 
