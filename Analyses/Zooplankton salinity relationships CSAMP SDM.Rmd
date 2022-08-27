@@ -132,6 +132,7 @@ zoop_sample_size <- zoop_data_mass %>% mutate(Month=month(Date)) %>%
 
 ggplot(zoop_sample_size, aes(x=Year, y=Month, fill=Samplesize))+
   geom_tile()+
+  scale_y_continuous(breaks=1:12, labels=month(1:12, label=T))+
   scale_fill_viridis_c(breaks=c(1,5,10,15,20))+
   facet_wrap(~SUBREGION)+
   theme_bw()
