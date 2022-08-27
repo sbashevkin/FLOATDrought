@@ -1,7 +1,7 @@
 ---
-title: "Zoop-salinity CSAMP SDM model"
+title: "Zooplankton salinity relationships in Suisun"
 author: "Sam Bashevkin"
-date: "8/19/2022"
+date: "8/26/2022"
 output: html_document
 editor_options: 
   chunk_output_type: console
@@ -33,6 +33,7 @@ require(readxl)
 require(stringr)
 require(mgcv)
 require(purrr)
+require(deltamapr)
 ```
 
 Load zoop data
@@ -43,7 +44,7 @@ zoop_data<-Zoopsynther(Data_type="Community", Sources=c("EMP", "STN", "20mm", "F
 
 Read in zoop mass conversions
 ```{r}
-zoop_mass_conversions<-read_excel("~/ZoopSynth/Data paper/Biomass conversions.xlsx", sheet="Micro and Meso-zooplankton")%>%
+zoop_mass_conversions<-read_excel("Data/SMSCG salinity modeling/Biomass conversions.xlsx", sheet="Micro and Meso-zooplankton")%>%
   mutate(Taxname=case_when(Taxname=="Sinocalanus"~"Sinocalanus doerrii", # Change to help this match to zoop data
                            TRUE ~ Taxname),
          Taxlifestage=paste(Taxname, Lifestage))%>%
@@ -108,18 +109,34 @@ zoop_data_mass<-zoop_data%>%
   group_by(across(-BPUE))%>%
   summarise(BPUE=sum(BPUE), .groups="drop")%>% # Sum each IBMR categories
   st_as_sf(coords=c("Longitude", "Latitude"), crs=4326)%>%
-  st_transform(crs=st_crs(deltamapr::R_EDSM_Subregions_Mahardja))%>% # This and next 4 lines to filter data to Suisun Marsh
-  st_join(deltamapr::R_EDSM_Subregions_Mahardja%>%
-            select(SubRegion))%>%
-  st_drop_geometry()%>%
-  filter(SubRegion=="Suisun Marsh")%>%
+  st_transform(crs=st_crs(deltamapr::R_DSIBM)) %>% 
+  st_join(deltamapr::R_DSIBM %>%
+            select(SUBREGION)) %>%
+  st_drop_geometry() %>% 
+  filter(SUBREGION %in% c("NW Suisun","SW Suisun","NE Suisun","SE Suisun","Confluence"))%>%
   mutate(doy=yday(Date), #Day of year
          Year_fac=factor(Year), # Factor year for model random effect
          Station_fac=factor(Station), # Factor station for model random effect
          across(c(SalSurf, doy), list(s=~(.x-mean(.x))/sd(.x))), # Center and standardize predictors
          BPUE_log1p=log(BPUE+1)) # log1p transform BPUE for model
 
+
 ```
+
+Check sample size
+```{r message=FALSE, warning=FALSE}
+zoop_sample_size <- zoop_data_mass %>% mutate(Month=month(Date)) %>%
+  group_by(SampleID,Year,Month,SUBREGION,Station) %>% summarise(BPUE=sum(BPUE)) %>% mutate(Samplesize=1) %>%
+  group_by(Year, Month, SUBREGION) %>% summarise(mean_BPUE=mean(BPUE),Samplesize=sum(Samplesize)) %>%
+  filter(Year>=1995)
+
+ggplot(zoop_sample_size, aes(x=Year, y=Month, fill=Samplesize))+
+  geom_tile()+
+  scale_fill_viridis_c()+
+  facet_wrap(~SUBREGION)+
+  theme_bw()
+```
+
 
 Set up prediction data for model
 ```{r}

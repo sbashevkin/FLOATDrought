@@ -1,17 +1,17 @@
 ---
 title: "Zooplankton salinity relationships in Suisun"
 author: "Sam Bashevkin"
-date: "3/15/2022"
+date: "8/26/2022"
 output: html_document
 editor_options: 
   chunk_output_type: console
 knit: (function(input, ...) {
-    )
-    })
     rmarkdown::render(
       input,
       output_dir = 'docs',
       envir = globalenv()
+    )
+    })
 ---
 
 
@@ -130,8 +130,11 @@ zoop_sample_size <- zoop_data_mass %>% mutate(Month=month(Date)) %>%
   group_by(Year, Month, SUBREGION) %>% summarise(mean_BPUE=mean(BPUE),Samplesize=sum(Samplesize)) %>%
   filter(Year>=1995)
 
-write_csv(zoop_sample_size, "Outputs/zoop_data_sample_size_DSIBM.csv") # Save data for Sam to review
-
+ggplot(zoop_sample_size, aes(x=Year, y=Month, fill=Samplesize))+
+  geom_tile()+
+  scale_fill_viridis_c(breaks=c(1,5,10,15,20))+
+  facet_wrap(~SUBREGION)+
+  theme_bw()
 ```
 
 
@@ -262,7 +265,7 @@ sal_fix<-function(data, sal_conversions, sal_target, target_column, months){
   # Set up salinity conversion factors for data and target
   salinity_conversions_correction<-salinity_conversions%>%
     left_join(sal_conversions_target, by=c("IBMR", "Month"))%>% # Join targets to full set of conversions
-    mutate(Correction=fit_target-fit)%>% # Calculate correction factor
+    mutate(Correction=(exp(fit_target)-1)/(exp(fit)-1))%>% # Calculate correction factor
     select(IBMR, Month, SalSurf, Correction)
   
   # Pull unique salinities for outrange (to test for any data salinities not present in model)
