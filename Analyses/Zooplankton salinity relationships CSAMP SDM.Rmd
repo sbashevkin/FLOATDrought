@@ -137,11 +137,21 @@ ggplot(zoop_sample_size, aes(x=Year, y=Month, fill=Samplesize))+
   facet_wrap(~SUBREGION)+
   theme_bw()
 ```
+All the remaining brackish regions have sufficient sample size with the exception of NE Suisun. As such, NE Suisun is to be combined with SE Suisun while the rest of the regions are to be analyzed on their own.
+
+Create a new column with IBMR edited regions to accomodate combination of NE and SE Suisun regions.
+```{r}
+zoop_data_mass$Subregion_edit<-ifelse(zoop_data_mass$SUBREGION=="NE Suisun"|zoop_data_mass$SUBREGION=="SE Suisun","East Suisun",zoop_data_mass$SUBREGION)
+
+```
 
 
 Set up prediction data for model
 ```{r}
-newdata<-expand_grid(date=mdy(paste(1:12, 15, 2001, sep="/")), # The 15th of each month on a non-leap year
+newdata<-list()
+
+newdata_function<-function(Station){
+  expand_grid(date=mdy(paste(1:12, 15, 2001, sep="/")), # The 15th of each month on a non-leap year
                      SalSurf=seq(min(round(zoop_data_mass$SalSurf), 1), 
                                  round(max(zoop_data_mass$SalSurf), 1), by=0.1))%>% # Salinity sequence nicely rounded to 1 decimal
   mutate(Month=month(date),
@@ -149,19 +159,27 @@ newdata<-expand_grid(date=mdy(paste(1:12, 15, 2001, sep="/")), # The 15th of eac
          SalSurf_s=(SalSurf-mean(zoop_data_mass$SalSurf))/sd(zoop_data_mass$SalSurf), # center and standardize salinity to match data
          doy_s=(doy-mean(zoop_data_mass$doy))/sd(zoop_data_mass$doy), # center and standardize doy to match data
          Year_fac="2010", # Set arbitrary year (won't be used)
-         Station_fac="NZ032")%>% # Set arbitrary station (won't be used)
+         Station_fac=Station)%>% # Set arbitrary station (won't be used) 
   select(Month, doy, doy_s, Year_fac, Station_fac, SalSurf, SalSurf_s)
+}
+
+newdata[["Confluence"]]<-newdata_function(Station="513")
+newdata[["East Suisun"]]<-newdata_function(Station="NZ048")
+newdata[["NW Suisun"]]<-newdata_function(Station="NZ020")
+newdata[["SW Suisun"]]<-newdata_function(Station="405")
+
 ```
 
 model
 ```{r}
-sal_model<-function(group){
+
+sal_model<-function(group,region,new_data){
   par(mfrow=c(2,2))
   cat("<<<<<<<<<<<<<<<<<<<<<<< modeling", group, ">>>>>>>>>>>>>>>>>>>>>>>>>\n\n")
   
   model<-gam(BPUE_log1p ~ te(SalSurf_s, doy_s, k=c(5,5), bs=c("cs", "cc")) + 
                s(Year_fac, bs="re") + s(Station_fac, bs="re"),
-             data=filter(zoop_data_mass, IBMR==group & Year>=2000), 
+             data=filter(zoop_data_mass, IBMR==group & Subregion_edit==region & Year>=2000), 
              method="REML")
   
   cat("-------------gam check-------------\n")
@@ -170,7 +188,7 @@ sal_model<-function(group){
   cat("\n\n-------------summary-------------\n")
   print(summary(model))
   
-  sal<-predict(model, type="terms", terms="te(SalSurf_s,doy_s)", newdata=newdata, se.fit=T)%>%
+  sal<-predict(model, type="terms", terms="te(SalSurf_s,doy_s)", newdata=new_data, se.fit=T)%>%
     as_tibble()%>%
     mutate(across(everything(), as.vector))%>% # Make everything tidy
     rename(fit=starts_with("fit"), se=starts_with("se.fit"))%>%
@@ -183,12 +201,15 @@ sal_model<-function(group){
 }
 ```
 
-Apply model to all groups
+Apply model to all groups for the confluence region
 ```{r}
-sal_models<-map(set_names(unique(zoop_data_mass$IBMR)), sal_model)
+
+##BM: I stopped here
+sal_models_confluence<-map(set_names(unique(zoop_data_mass$IBMR)), sal_model(group=.x,region="Confluence",new_data=newdata[["Confluence"]]))
+
 ```
 
-Extract salinity conversions
+Extract salinity conversions 
 ```{r}
 sal_conversions<-map_dfr(sal_models, ~.x[["sal"]], .id = "IBMR")
 
