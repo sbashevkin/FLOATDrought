@@ -2,7 +2,10 @@
 title: "Zooplankton salinity relationships in Suisun"
 author: "Sam Bashevkin"
 date: "8/26/2022"
-output: html_document
+output: 
+  html_document:
+    toc: true
+    toc_float: true
 editor_options: 
   chunk_output_type: console
 knit: (function(input, ...) {
@@ -20,8 +23,9 @@ knitr::opts_chunk$set(echo = TRUE)
 options(scipen=999)
 ```
 
-Load packages
-```{r, message=FALSE}
+# Load packages
+
+```{r, message=FALSE, warning=FALSE}
 require(dplyr)
 require(zooper)
 require(lubridate)
@@ -34,9 +38,11 @@ require(stringr)
 require(mgcv)
 require(purrr)
 require(deltamapr)
+require(scales)
 ```
 
-Load zoop data
+# Load and wrangle data
+
 ```{r}
 zoop_data<-Zoopsynther(Data_type="Community", Sources=c("EMP", "STN", "20mm", "FMWT"), Time_consistency = TRUE)
 ```
@@ -113,7 +119,7 @@ zoop_data_mass<-zoop_data%>%
   st_join(deltamapr::R_DSIBM %>%
             select(SUBREGION)) %>%
   st_drop_geometry() %>% 
-  filter(SUBREGION %in% c("NW Suisun","SW Suisun","NE Suisun","SE Suisun","Confluence"))%>%
+  filter(SUBREGION %in% c("NW Suisun","SW Suisun","NE Suisun","SE Suisun","Confluence", "Suisun Marsh"))%>%
   mutate(doy=yday(Date), #Day of year
          Year_fac=factor(Year), # Factor year for model random effect
          Station_fac=factor(Station), # Factor station for model random effect
@@ -137,6 +143,7 @@ ggplot(zoop_sample_size, aes(x=Year, y=Month, fill=Samplesize))+
   facet_wrap(~SUBREGION)+
   theme_bw()
 ```
+
 All the remaining brackish regions have sufficient sample size with the exception of NE Suisun. As such, NE Suisun is to be combined with SE Suisun while the rest of the regions are to be analyzed on their own.
 
 Create a new column with IBMR edited regions to accomodate combination of NE and SE Suisun regions.
@@ -145,42 +152,64 @@ zoop_data_mass$Subregion_edit<-ifelse(zoop_data_mass$SUBREGION=="NE Suisun"|zoop
 
 ```
 
+# Model
+
+## Prediction data
 
 Set up prediction data for model
 ```{r}
-newdata<-list()
+# Min year to start models
+year_min<-2000
 
-newdata_function<-function(Station){
+newdata_function<-function(region, data=zoop_data_mass){
+  
+  data_filt<-data%>%
+    filter(Subregion_edit%in%region & Year >= year_min)
   expand_grid(date=mdy(paste(1:12, 15, 2001, sep="/")), # The 15th of each month on a non-leap year
-                     SalSurf=seq(min(round(zoop_data_mass$SalSurf), 1), 
-                                 round(max(zoop_data_mass$SalSurf), 1), by=0.1))%>% # Salinity sequence nicely rounded to 1 decimal
-  mutate(Month=month(date),
-         doy=yday(date), # Day of year
-         SalSurf_s=(SalSurf-mean(zoop_data_mass$SalSurf))/sd(zoop_data_mass$SalSurf), # center and standardize salinity to match data
-         doy_s=(doy-mean(zoop_data_mass$doy))/sd(zoop_data_mass$doy), # center and standardize doy to match data
-         Year_fac="2010", # Set arbitrary year (won't be used)
-         Station_fac=Station)%>% # Set arbitrary station (won't be used) 
-  select(Month, doy, doy_s, Year_fac, Station_fac, SalSurf, SalSurf_s)
+              SalSurf=seq(round(quantile(data_filt$SalSurf, 0.025), 1), 
+                          round(quantile(data_filt$SalSurf, 0.975), 1), by=0.1))%>% # Salinity sequence nicely rounded to 1 decimal
+    mutate(Month=month(date),
+           doy=yday(date), # Day of year
+           SalSurf_s=(SalSurf-mean(data$SalSurf))/sd(data$SalSurf), # center and standardize salinity to match data
+           doy_s=(doy-mean(data$doy))/sd(data$doy))%>% # center and standardize doy to match data
+    select(Month, doy, doy_s, SalSurf, SalSurf_s)
 }
 
-newdata[["Confluence"]]<-newdata_function(Station="513")
-newdata[["East Suisun"]]<-newdata_function(Station="NZ048")
-newdata[["NW Suisun"]]<-newdata_function(Station="NZ020")
-newdata[["SW Suisun"]]<-newdata_function(Station="405")
-
+newdata<-map(set_names(unique(zoop_data_mass$Subregion_edit)), newdata_function)
 ```
+
+## Model fitting
 
 model
 ```{r}
 
-sal_model<-function(group,region,new_data){
-  par(mfrow=c(2,2))
-  cat("<<<<<<<<<<<<<<<<<<<<<<< modeling", group, ">>>>>>>>>>>>>>>>>>>>>>>>>\n\n")
+sal_model<-function(group,region,new_data=newdata){
   
+  cat("<<<<<<<<<<<<<<<<<<<<<<< modeling", group, region, ">>>>>>>>>>>>>>>>>>>>>>>>>\n\n")
+  
+  new_data<-new_data[[region]]
+  
+  data<-filter(zoop_data_mass, IBMR==group & Subregion_edit==region & Year>=year_min)
+  
+  par(mfrow=c(2,2))
+  
+  if(length(unique(data$Station_fac))>1){
   model<-gam(BPUE_log1p ~ te(SalSurf_s, doy_s, k=c(5,5), bs=c("cs", "cc")) + 
                s(Year_fac, bs="re") + s(Station_fac, bs="re"),
-             data=filter(zoop_data_mass, IBMR==group & Subregion_edit==region & Year>=2000), 
+             data=data, 
              method="REML")
+  
+  random_effects<-c("s(Year_fac)", "s(Station_fac)")
+    
+  }else{
+    
+  model<-gam(BPUE_log1p ~ te(SalSurf_s, doy_s, k=c(5,5), bs=c("cs", "cc")) + 
+               s(Year_fac, bs="re"),
+             data=data, 
+             method="REML")
+  
+  random_effects<-c("s(Year_fac)")
+  }
   
   cat("-------------gam check-------------\n")
   gam.check(model)
@@ -188,12 +217,12 @@ sal_model<-function(group,region,new_data){
   cat("\n\n-------------summary-------------\n")
   print(summary(model))
   
-  sal<-predict(model, type="terms", terms="te(SalSurf_s,doy_s)", newdata=new_data, se.fit=T)%>%
+  sal<-predict(model, type="response", exclude=random_effects, newdata=new_data, se.fit=T, newdata.guaranteed=TRUE)%>%
     as_tibble()%>%
     mutate(across(everything(), as.vector))%>% # Make everything tidy
     rename(fit=starts_with("fit"), se=starts_with("se.fit"))%>%
-    bind_cols(newdata%>% # Add covariate columns before these columns
-                select(-Year_fac, -Station_fac, -doy_s, -SalSurf_s), 
+    bind_cols(new_data%>% # Add covariate columns before these columns
+                select(-doy_s, -SalSurf_s), 
               .)
   
   out<-list(model=model, sal=sal)
@@ -203,194 +232,131 @@ sal_model<-function(group,region,new_data){
 
 Apply model to all groups for the confluence region
 ```{r}
+model_factors<-expand_grid(IBMR=unique(zoop_data_mass$IBMR),
+                           Subregion_edit=unique(zoop_data_mass$Subregion_edit))%>%
+  mutate(IBMR=set_names(IBMR, paste(IBMR, Subregion_edit)))
 
-##BM: I stopped here
-sal_models_confluence<-map(set_names(unique(zoop_data_mass$IBMR)), sal_model(group=.x,region="Confluence",new_data=newdata[["Confluence"]]))
+sal_models<-pmap(model_factors, function(IBMR, Subregion_edit) sal_model(IBMR, Subregion_edit))
 
 ```
 
-Extract salinity conversions 
+## Extract salinity conversions 
+
 ```{r}
-sal_conversions<-map_dfr(sal_models, ~.x[["sal"]], .id = "IBMR")
+sal_conversions<-map_dfr(sal_models, ~.x[["sal"]], .id = "IBMR_region")%>%
+  mutate(IBMR=sapply(IBMR_region, function(x) str_split(x, " ", n=2)[[1]][1]),
+         Region=factor(sapply(IBMR_region, function(x) str_split(x, " ", n=2)[[1]][2]), levels=c("Confluence", "Suisun Marsh", "East Suisun", "NW Suisun", "SW Suisun")),
+         Month=as.integer(Month))
 
 str(sal_conversions)
 ```
 
 plot salinity conversions
-```{r}
+```{r, fig.width=12, fig.height=8}
 ggplot(sal_conversions, aes(x=SalSurf, y=fit, ymin=fit-se, ymax=fit+se, fill=IBMR))+
   geom_ribbon(alpha=0.4)+
   ylab("fit (log scale)")+
-  facet_wrap(~Month)+
+  facet_grid(Region~Month)+
   scale_fill_viridis_d()+
   theme_bw()
 ```
 
+# Apply model
+
 Load in SMSCG modeled salinity
-```{r}
-SMSCG_sal<-read_csv("Data/SMSCG salinity modeling/bdl_summer_fall_2022_psu_filtered.csv", skip = 10)%>%
-  mutate(Month=month(datetime))%>%
-  drop_na()%>%
-  group_by(Month)%>%
-  summarise(across(contains("_bn_"), ~round(mean(.x), 1)))
+```{r, message=FALSE}
+modeled_sal<-read_csv("Data/CSAMP_DS_SDM_salinity_scenarios.csv",
+                    col_types = cols_only(region="c", year="i", month="i", 
+                                           sal_base="d", sal_fallX2_hi="d", sal_fallX2_low="d", 
+                                           sal_sumX2_hi="d", sal_sumX2_low ="d", sal_SMSCG="d"))%>%
+  mutate(across(starts_with("sal_"), ~if_else(is.na(.x), sal_base, .x)))%>%
+  filter(region%in%unique(zoop_data_mass$SUBREGION))%>%
+  mutate(region=factor(region, levels=c("Confluence", "Suisun Marsh", "NE Suisun", "SE Suisun", "NW Suisun", "SW Suisun")))%>%
+  pivot_longer(cols=starts_with("sal_"), names_to="Scenario", values_to="Salinity")%>% # Prepare data for easier plotting
+         mutate(Scenario=factor(Scenario, 
+                                levels=c("sal_base","sal_fallX2_hi","sal_fallX2_low","sal_sumX2_hi","sal_sumX2_low","sal_SMSCG")))%>%
+  mutate(Salinity=round(Salinity, 1))
+  
 ```
 
 Plot SMSCG modeled salinity
-```{r}
-ggplot(pivot_longer(SMSCG_sal, cols=contains("_bn_"), names_to="Scenario", values_to="Salinity")%>% # Prepare data for easier plotting
-         mutate(Scenario=factor(Scenario, levels=c("bdl_bn_noact", "bdl_bn_smscg6", "bdl_bn_smscg4"))), 
-       aes(x=Month, y=Salinity, color=Scenario))+
+```{r, fig.width=12, fig.height=8}
+ggplot(modeled_sal, 
+       aes(x=year, y=Salinity, color=Scenario))+
   geom_line()+
-  scale_color_viridis_d(direction = -1)+
-  scale_x_continuous(breaks=1:12)+
+  scale_color_viridis_d()+
+  facet_grid(region ~ month(month, label=T))+
   theme_bw()+
-  theme(legend.position = "bottom")
+  theme(legend.position = "bottom", axis.text.x=element_text(angle=45, hjust=1))
 ```
-
 
 salinity conversion function
 ```{r}
-sal_fix<-function(data, sal_conversions, sal_target, target_column, months){
-  
-  salinity_conversions<-sal_conversions%>%
-    filter(Month%in%months)%>% ## Only choose the months to be included
-    mutate(SalSurf=as.character(SalSurf))%>% # Change to character for safer joining
-    select(IBMR, Month, SalSurf, fit)
-  
-  # Are any target salinities outside the range of the model?
-  target_outside<-setdiff(as.character(sal_target[[target_column]]), salinity_conversions$SalSurf)
-  
-  if(length(target_outside)>0){
-    cat("Some target salinities are out of range for the prediction. They are:", sort(target_outside))
-  }
-  
-  # select target salinities from the conversions dataset
-  sal_conversions_target<-salinity_conversions%>%
-    semi_join(sal_target%>%
-                mutate(SalSurf=as.character(.data[[target_column]])), 
-              by=c("Month", "SalSurf"))%>%
-    select(IBMR, Month, fit_target=fit)
-  
-  if(any(duplicated(paste(sal_conversions_target$Month, sal_conversions_target$IBMR)))){
-    stop("sal_conversions were duplicated in filtering out the target salinities")
-  }
-  
-  #Make sure all months are present for each IBMR
-  monthcheck<-sal_conversions_target%>%
-    group_by(IBMR)%>%
-    summarise(N=n_distinct(Month))
-  
-  if(any(monthcheck$N!=length(months))){
-    stop("Some months are missing in the sal_target")
-  }
-  
-  # Set up salinity conversion factors for data and target
-  salinity_conversions_correction<-salinity_conversions%>%
-    left_join(sal_conversions_target, by=c("IBMR", "Month"))%>% # Join targets to full set of conversions
-    mutate(Correction=(exp(fit_target)-1)/(exp(fit)-1))%>% # Calculate correction factor
-    select(IBMR, Month, SalSurf, Correction)
-  
-  # Pull unique salinities for outrange (to test for any data salinities not present in model)
-  sals<-unique(salinity_conversions_correction$SalSurf)
-  
-  # Convert salinity to a character rounded to 1 decimal for safer joining
-  data<-data%>%
-    mutate(Sal_merge=as.character(round(SalSurf, 1)))
-  
-  # Are any salinities from the data not present in the model?
-  outrange<-setdiff(data$Sal_merge, sals)
-  
-  if(length(outrange)>0){
-    cat("Some salinities are out of range for the prediction. They are:", sort(outrange))
-  }
-  
-  # Join salinity conversions and calculate adjusted BPUE
-  data<-data%>%
-    left_join(salinity_conversions_correction, by=c("Month", "Sal_merge"="SalSurf", "IBMR"))%>%
-    mutate(BPUE_adj=exp(BPUE_log1p+Correction)-1) # Calculate adjusted BPUE and undo the log1p transformation
-  
-  return(data)
-}
+zoop_saladjusted<-modeled_sal%>%
+  mutate(Salinity=as.character(Salinity),
+         IBMR=unique(model_factors$IBMR)[1])%>%
+  complete(region, year, month, Scenario, IBMR=unique(model_factors$IBMR))%>%
+  group_by(region, year, month, Scenario)%>%
+  mutate(Salinity=na.exclude(Salinity),
+         region2=if_else(region%in%c("NE Suisun", "SE Suisun"), "East Suisun", as.character(region)))%>%
+  left_join(sal_conversions%>%
+              select(Region, Month, IBMR, SalSurf, fit)%>%
+              mutate(SalSurf=as.character(SalSurf)),
+            by=c("region2"="Region",
+                 "month"="Month",
+                 "Salinity"="SalSurf",
+                 "IBMR"="IBMR"))%>%
+  select(-Salinity, -region2)%>%
+  mutate(fit=exp(fit)-1)%>%
+  pivot_wider(names_from="Scenario", values_from="fit")%>%
+  mutate(across(starts_with("sal_"), ~(.x-sal_base)/sal_base))
 ```
 
-Prepare data for conversion
-```{r}
-# From Rosie:
-#Calculate water year function
-wtr_yr <- function(dates, start_month=12) {
-  # Convert dates into POSIXlt
-  dates.posix = as.POSIXlt(dates)
-  # Year offset
-  offset = ifelse(dates.posix$mon == start_month - 1, 1, 0)
-  # Water year
-  adj.year = dates.posix$year + 1900 + offset
-  # Return the water year
-  adj.year
-}
-
-# Read in water year types
-year_types<-read_csv(url("https://raw.githubusercontent.com/rosehartman/DCGmodeling/main/yeartypes.csv"))%>%
-  rename(Yearadj = Year)
-
-# Choose the months to be used
-months<-c(6,7,8,9,10)
-
-# Filter data to what we want to apply salinity conversions to
-zoop_data_mass_bn<-zoop_data_mass%>%
-  mutate(Yearadj = wtr_yr(Date),
-         Month=month(Date)) %>%
-  filter(Year > 2000)%>%
-  left_join(year_types) %>%
-  filter(Yr_type == "Below Normal" & Month %in% months)%>%
-  select(Date, Month, Year, SalSurf, IBMR, BPUE, BPUE_log1p)
-```
-
-
-Apply the conversion function
-```{r}
-zoop_corrected<-map_dfr(set_names(c("bdl_bn_noact", "bdl_bn_smscg4", "bdl_bn_smscg6")), ~sal_fix(zoop_data_mass_bn, sal_conversions, SMSCG_sal, .x, months), .id="Scenario")%>%
-  mutate(Scenario=factor(Scenario, levels=c("bdl_bn_noact", "bdl_bn_smscg6", "bdl_bn_smscg4")))
+Plot the missing model results resulting from out-of-range salinity values in the inputs
+```{r, fig.width=12, fig.height=8}
+ggplot(zoop_saladjusted%>%
+         filter(IBMR=="acartela")%>%
+         pivot_longer(cols=starts_with("sal_"), names_to="Scenario", values_to="zoop_change"),
+       aes(x=year, y=Scenario, fill=is.na(zoop_change)))+
+  geom_tile()+
+  scale_fill_viridis_d(name="Are the model results missing due to out-of-range salinity values?")+
+  facet_grid(region ~ month(month, label=T))+
+  theme_bw()+
+  theme(legend.position = "bottom", axis.text.x=element_text(angle=45, hjust=1))
 ```
 
 Plot the result
-```{r, fig.width=12, fig.height=16}
-ggplot(zoop_corrected, aes(x=Date, y=BPUE_adj, color=Scenario))+
-  geom_point(alpha=0.4)+
-  scale_y_continuous(trans="log1p", breaks = c(0, 10^(1:6)))+
-  scale_color_viridis_d(direction = -1, end = 0.9)+
-  facet_wrap(~paste(IBMR, Year), scales="free", ncol=5)+
+
+Create some plotting functions
+```{r plot funcs}
+neglop1p<-trans_new("neglop1p", transform=function(x) sign(x)*log(abs(x)+1), inverse=function(x) sign(x)*(exp(abs(x))-1))
+plot_scenario_result <- function(scenario) {
+ggplot(zoop_saladjusted,
+       aes(x=year, y=.data[[scenario]], color=IBMR))+
+  geom_point()+
+  scale_color_viridis_d()+
+  scale_y_continuous(trans=neglop1p, breaks=c(-1000, -100, -10, -1, 0, 1, 10, 100, 1000))+
+  ylab("Proportional change in zooplankton biomass (log scale)")+
+  facet_grid(region ~ month(month, label=T))+
   theme_bw()+
-  theme(legend.position = "bottom")
+  theme(legend.position = "bottom", axis.text.x=element_text(angle=45, hjust=1))
+}
 ```
 
-Plot BPUE vs BPUE_adj
-```{r}
-ggplot(zoop_corrected, aes(x=BPUE, y=BPUE_adj, color=Scenario))+
-  geom_point(alpha=0.4)+
-  scale_y_continuous(trans="log1p", breaks = c(0, 10^(1:6)))+
-  scale_x_continuous(trans="log1p", breaks = c(0, 10^(1:6)))+
-  scale_color_viridis_d(direction = -1, end = 0.9)+
-  facet_wrap(~IBMR, scales="free")+
-  theme_bw()+
-  theme(legend.position = "bottom")
+```{r create plots}
+# Create plots for each Parameter
+scenario_result_plots <- tibble(Scenario=unique(modeled_sal$Scenario)[-1])%>%
+  mutate(plot=map(as.character(unique(modeled_sal$Scenario))[-1], plot_scenario_result))
 ```
 
-Summarise zoops by IBMR, scenario, and month
-```{r}
-zoop_bn_sum<-zoop_corrected%>%
-  group_by(IBMR, Month, Scenario)%>%
-  summarise(BPUE_sum=sum(BPUE_adj), BPUE_sd=sd(BPUE_adj), .groups="drop")
+## Result plots {.tabset .tabset-pills}
 
-write_csv(zoop_bn_sum, "Outputs/zoop_salinity_corrected_sum.csv")
+```{r print plots, echo = FALSE, results = "asis", fig.width = 8, fig.height = 7}
+for (i in 1:nrow(scenario_result_plots)) {
+  # Create subheadings for each Parameter
+  cat("### ", as.character(scenario_result_plots$Scenario[i]), "\n\n")
+  # Print plot
+  print(scenario_result_plots$plot[[i]])
+  cat("\n\n")
+}
 ```
-
-Plot summarized CPUE +/- SD
-```{r, fig.width=12, fig.height=12}
-ggplot(zoop_bn_sum, aes(x=Month, y=BPUE_sum, ymin=BPUE_sum-BPUE_sd, ymax=BPUE_sum+BPUE_sd, fill=Scenario))+
-  geom_pointrange(position = position_dodge(width=0.6), shape=21, color="black", size=1)+
-  scale_fill_viridis_d(direction = -1, end = 0.9)+
-  facet_wrap(~IBMR, scales="free")+
-  theme_bw()+
-  theme(legend.position = "bottom")
-```
-
