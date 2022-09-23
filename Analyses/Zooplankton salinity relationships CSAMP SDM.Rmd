@@ -132,8 +132,6 @@ zoop_data_mass<-zoop_data%>%
          Station_fac=factor(Station), # Factor station for model random effect
          across(c(SalSurf, doy), list(s=~(.x-mean(.x))/sd(.x))), # Center and standardize predictors
          BPUE_log1p=log(BPUE+1)) # log1p transform BPUE for model
-
-
 ```
 
 Check sample size
@@ -180,7 +178,7 @@ newdata_function<-function(region, data=zoop_data_mass){
   month_sal<-data_filt%>%
     group_by(Month)%>%
     summarise(l95=quantile(SalSurf, 0.025),
-              u95=quantile(SalSurf, 0.975))
+              u95=quantile(SalSurf, 0.975), .groups="drop")
   
   newdata<-expand_grid(date=mdy(paste(1:12, 15, 2001, sep="/")), # The 15th of each month on a non-leap year
                        SalSurf=seq(round(min(data_filt$SalSurf), 1), 
@@ -224,7 +222,6 @@ predict_posterior<-function(model, newdata, exclude, n=1e3, seed=999){
 
 model
 ```{r}
-
 sal_model<-function(group,region,new_data=newdata){
   
   cat("<<<<<<<<<<<<<<<<<<<<<<< modeling", group, region, ">>>>>>>>>>>>>>>>>>>>>>>>>\n\n")
@@ -302,18 +299,18 @@ plot_sal_conversions<-function(group, data=sal_conversions_plot){
   if(group!="All"){
     data<-filter(data, IBMR%in%group)
     
-  ggplot(data, aes(x=SalSurf, y=median, ymin=l95, ymax=u95, fill=IBMR))+
-    geom_ribbon(alpha=0.4)+
-    ylab("Zooplankton biomass (log scale)")+
-    facet_grid(Region~Month)+
-    scale_fill_viridis_d()+
-    theme_bw()+
-    theme(axis.text.x=element_text(angle=45, hjust=1))
-  }else{
   ggplot(data, aes(x=SalSurf, y=median, ymin=l95, ymax=u95))+
     geom_ribbon(alpha=0.4, fill="chartreuse4")+
     ylab("Zooplankton biomass (log scale)")+
-    facet_grid(Region~Month)+
+    facet_grid(Region~month(Month, label=T))+
+    theme_bw()+
+    theme(axis.text.x=element_text(angle=45, hjust=1))
+  }else{
+  ggplot(data, aes(x=SalSurf, y=median, ymin=l95, ymax=u95, fill=IBMR))+
+    geom_ribbon(alpha=0.4)+
+    ylab("Zooplankton biomass (log scale)")+
+    facet_grid(Region~month(Month, label=T))+
+    scale_fill_viridis_d()+
     theme_bw()+
     theme(axis.text.x=element_text(angle=45, hjust=1))
   }
@@ -353,8 +350,8 @@ scenario_sal<-read_csv("Data/CSAMP_DS_SDM_salinity_scenarios.csv",
                                 "SE Suisun", "NW Suisun", "SW Suisun")))%>%
   pivot_longer(cols=starts_with("sal_"), names_to="Scenario", values_to="Salinity")%>% # Prepare data for easier plotting
   mutate(Scenario=factor(Scenario, 
-                         levels=c("sal_base","sal_fallX2_hi","sal_fallX2_low", 
-                                  "sal_sumX2_hi","sal_sumX2_low","sal_SMSCG")),
+                         levels=c("sal_SMSCG", "sal_sumX2_low", "sal_sumX2_hi",
+                                  "sal_fallX2_low","sal_fallX2_hi", "sal_base")),
          Salinity=round(Salinity, 1))
 
 ```
@@ -364,7 +361,7 @@ Plot SMSCG modeled salinity
 ggplot(scenario_sal, 
        aes(x=year, y=Salinity, color=Scenario))+
   geom_line()+
-  scale_color_viridis_d()+
+  scale_color_viridis_d(direction=-1)+
   facet_grid(region ~ month(month, label=T))+
   theme_bw()+
   theme(legend.position = "bottom", axis.text.x=element_text(angle=45, hjust=1))
@@ -395,7 +392,7 @@ zoop_saladjusted<-scenario_sal%>%
   summarise(across(starts_with("sal_"), 
                    list(median=~median(.x, na.rm=T), 
                         l95=~quantile(.x, 0.025, na.rm=T), 
-                        u95=~quantile(.x, 0.95, na.rm=T))), 
+                        u95=~quantile(.x, 0.975, na.rm=T))), 
             .groups="drop")
 
 write_csv(zoop_saladjusted, file.path("Outputs", "CSAMP zoop sal adjustments.csv"))
