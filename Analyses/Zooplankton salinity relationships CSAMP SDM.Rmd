@@ -167,18 +167,21 @@ zoop_data_mass$Subregion_edit<-ifelse(zoop_data_mass$SUBREGION%in%c("NE Suisun",
 Set up prediction data for model
 ```{r}
 # Min year to start models
-year_min<-2000
+year_min<-1995
 
-newdata_function<-function(region, data=zoop_data_mass){
+newdata_function<-function(region, data=zoop_data_mass, quant=0.99){
+  
+  lower<-(1-quant)/(2)
+  upper<-1-lower
   
   data_filt<-data%>%
     filter(Subregion_edit%in%region & Year >= year_min)
   
-  # Calculate monthly 95% quantiles of salinity
+  # Calculate monthly quantiles of salinity
   month_sal<-data_filt%>%
     group_by(Month)%>%
-    summarise(l95=quantile(SalSurf, 0.025),
-              u95=quantile(SalSurf, 0.975), .groups="drop")
+    summarise(l=quantile(SalSurf, lower),
+              u=quantile(SalSurf, upper), .groups="drop")
   
   newdata<-expand_grid(date=mdy(paste(1:12, 15, 2001, sep="/")), # The 15th of each month on a non-leap year
                        SalSurf=seq(round(min(data_filt$SalSurf), 1), 
@@ -188,7 +191,7 @@ newdata_function<-function(region, data=zoop_data_mass){
            SalSurf_s=(SalSurf-mean(data$SalSurf))/sd(data$SalSurf), # center and standardize salinity to match data
            doy_s=(doy-mean(data$doy))/sd(data$doy))%>% # center and standardize doy to match data
     left_join(month_sal, by="Month")%>%
-    filter(SalSurf >= l95 & SalSurf <=u95)%>% # Remove any salinity values outside the 95% quantiles for each month
+    filter(SalSurf >= l & SalSurf <= u)%>% # Remove any salinity values outside the quantiles for each month
     select(Month, doy, doy_s, SalSurf, SalSurf_s)
   
 }
