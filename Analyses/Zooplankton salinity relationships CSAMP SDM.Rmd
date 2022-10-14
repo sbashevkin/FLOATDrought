@@ -389,6 +389,7 @@ zoop_saladjusted<-scenario_sal%>%
   select(-Salinity, -region2)%>%
   mutate(across(starts_with("draw_"), ~exp(.x)-1))%>%
   pivot_longer(starts_with("draw_"), names_prefix="draw_", names_to="draw", values_to="fit")%>%
+  mutate(fit=if_else(fit<0, 0, fit))%>%
   pivot_wider(names_from="Scenario", values_from="fit")%>%
   mutate(across(starts_with("sal_"), ~(.x-sal_base)/sal_base))%>%
   group_by(region, year, month, IBMR)%>%
