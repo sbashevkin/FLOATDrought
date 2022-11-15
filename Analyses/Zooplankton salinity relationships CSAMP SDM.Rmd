@@ -302,20 +302,20 @@ plot_sal_conversions<-function(group, data=sal_conversions_plot){
   if(group!="All"){
     data<-filter(data, IBMR%in%group)
     
-  ggplot(data, aes(x=SalSurf, y=median, ymin=l95, ymax=u95))+
-    geom_ribbon(alpha=0.4, fill="chartreuse4")+
-    ylab("Zooplankton biomass (log scale)")+
-    facet_grid(Region~month(Month, label=T))+
-    theme_bw()+
-    theme(axis.text.x=element_text(angle=45, hjust=1))
+    ggplot(data, aes(x=SalSurf, y=median, ymin=l95, ymax=u95))+
+      geom_ribbon(alpha=0.4, fill="chartreuse4")+
+      ylab("Zooplankton biomass (log scale)")+
+      facet_grid(Region~month(Month, label=T))+
+      theme_bw()+
+      theme(axis.text.x=element_text(angle=45, hjust=1))
   }else{
-  ggplot(data, aes(x=SalSurf, y=median, ymin=l95, ymax=u95, fill=IBMR))+
-    geom_ribbon(alpha=0.4)+
-    ylab("Zooplankton biomass (log scale)")+
-    facet_grid(Region~month(Month, label=T))+
-    scale_fill_viridis_d()+
-    theme_bw()+
-    theme(axis.text.x=element_text(angle=45, hjust=1))
+    ggplot(data, aes(x=SalSurf, y=median, ymin=l95, ymax=u95, fill=IBMR))+
+      geom_ribbon(alpha=0.4)+
+      ylab("Zooplankton biomass (log scale)")+
+      facet_grid(Region~month(Month, label=T))+
+      scale_fill_viridis_d()+
+      theme_bw()+
+      theme(axis.text.x=element_text(angle=45, hjust=1))
   }
 }
 ```
@@ -342,19 +342,22 @@ for (i in 1:nrow(sal_conversion_plots)) {
 
 Load in SMSCG modeled salinity
 ```{r, message=FALSE}
-scenario_sal<-read_csv("Data/CSAMP_DS_SDM_salinity_scenarios.csv",
-                       col_types = cols_only(region="c", year="i", month="i", 
-                                             sal_base="d", sal_fallX2_hi="d", sal_fallX2_low="d", 
-                                             sal_sumX2_hi="d", sal_sumX2_low ="d", sal_SMSCG="d"))%>%
-  mutate(across(starts_with("sal_"), ~if_else(is.na(.x), sal_base, .x)))%>%
+scenario_file<-"Data/CSAMP_DS_SDM_salinity_scenarios.csv"
+scenario_names<-tibble(name=colnames(read.csv(scenario_file)))%>%
+  filter(str_detect(name, "sal_"))%>%
+  rev()
+
+scenario_sal<-read_csv(scenario_file, guess_max=2800)%>%
+  select(region, year, month, starts_with("sal_"))%>%
+  mutate(across(c(year, month), as.integer),
+         across(starts_with("sal_"), ~if_else(is.na(.x), sal_base, .x)))%>%
   filter(region%in%unique(zoop_data_mass$SUBREGION))%>%
   mutate(region=factor(region, 
                        levels=c("Confluence", "Suisun Marsh", "NE Suisun", 
                                 "SE Suisun", "NW Suisun", "SW Suisun")))%>%
   pivot_longer(cols=starts_with("sal_"), names_to="Scenario", values_to="Salinity")%>% # Prepare data for easier plotting
   mutate(Scenario=factor(Scenario, 
-                         levels=c("sal_SMSCG", "sal_sumX2_low", "sal_sumX2_hi",
-                                  "sal_fallX2_low","sal_fallX2_hi", "sal_base")),
+                         levels=scenario_names$name),
          Salinity=round(Salinity, 1))
 
 ```
@@ -409,10 +412,10 @@ You can find the final zoop salinity adjustments [here](https://github.com/sbash
 Plot the missing model results resulting from out-of-range salinity values in the inputs
 ```{r, fig.width=12, fig.height=8}
 missing_adjusted_data<-zoop_saladjusted%>%
-         select(-ends_with("l95"), -ends_with("u95"))%>%
-         filter(IBMR=="acartela")%>%
-         pivot_longer(cols=starts_with("sal_"), names_to="Scenario", values_to="zoop_change")%>%
-         mutate(Scenario=str_remove(Scenario, fixed("_median")))
+  select(-ends_with("l95"), -ends_with("u95"))%>%
+  filter(IBMR=="acartela")%>%
+  pivot_longer(cols=starts_with("sal_"), names_to="Scenario", values_to="zoop_change")%>%
+  mutate(Scenario=str_remove(Scenario, fixed("_median")))
 
 ggplot(missing_adjusted_data,
        aes(x=year, y=Scenario, fill=is.na(zoop_change)))+
@@ -459,14 +462,14 @@ for (i in 1:length(unique(scenario_result_plots$Scenario))) {
   # Create subheadings for each Parameter
   cat("### ", as.character(unique(scenario_result_plots$Scenario)[i]), " {.tabset .tabset-pills}", "\n\n")
   
-for (j in 1:length(unique(scenario_result_plots$IBMR))) {
-  # Create subheadings for each Parameter
-  cat("#### ", as.character(unique(scenario_result_plots$IBMR)[j]), "\n\n")
-  
-  p<-filter(scenario_result_plots, IBMR==unique(scenario_result_plots$IBMR)[j] & Scenario==unique(scenario_result_plots$Scenario)[i])$plot[[1]]
-  # Print plot
-  print(p)
-  cat("\n\n")
-}
+  for (j in 1:length(unique(scenario_result_plots$IBMR))) {
+    # Create subheadings for each Parameter
+    cat("#### ", as.character(unique(scenario_result_plots$IBMR)[j]), "\n\n")
+    
+    p<-filter(scenario_result_plots, IBMR==unique(scenario_result_plots$IBMR)[j] & Scenario==unique(scenario_result_plots$Scenario)[i])$plot[[1]]
+    # Print plot
+    print(p)
+    cat("\n\n")
+  }
 }
 ```
