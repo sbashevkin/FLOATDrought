@@ -12,7 +12,7 @@ editor_options:
 knit: (function(input, ...) {
     rmarkdown::render(
       input,
-      output_dir = 'docs',
+      output_dir = here::here('docs'),
       envir = globalenv()
     )
     })
@@ -27,21 +27,22 @@ options(scipen=999)
 # Load packages
 
 ```{r, message=FALSE, warning=FALSE}
-require(conflicted)
-require(MASS)
-require(dplyr)
-require(zooper)
-require(lubridate)
-require(readr)
-require(tidyr)
-require(ggplot2)
-require(sf)
-require(readxl)
-require(stringr)
-require(mgcv)
-require(purrr)
-require(deltamapr)
-require(scales)
+library(conflicted)
+library(MASS)
+library(dplyr)
+library(zooper)
+library(lubridate)
+library(readr)
+library(tidyr)
+library(ggplot2)
+library(sf)
+library(readxl)
+library(stringr)
+library(mgcv)
+library(purrr)
+library(deltamapr)
+library(scales)
+library(here)
 
 conflict_prefer("filter", "dplyr")
 conflict_prefer("select", "dplyr")
@@ -56,7 +57,7 @@ zoop_data<-Zoopsynther(Data_type="Community", Sources=c("EMP", "STN", "20mm", "F
 
 Read in zoop mass conversions
 ```{r}
-zoop_mass_conversions<-read_excel("Data/SMSCG salinity modeling/Biomass conversions.xlsx", sheet="Micro and Meso-zooplankton")%>%
+zoop_mass_conversions<-read_excel(here("Data/SMSCG salinity modeling/Biomass conversions.xlsx"), sheet="Micro and Meso-zooplankton")%>%
   mutate(Taxname=case_when(Taxname=="Sinocalanus"~"Sinocalanus doerrii", # Change to help this match to zoop data
                            TRUE ~ Taxname),
          Taxlifestage=paste(Taxname, Lifestage))%>%
@@ -65,19 +66,19 @@ zoop_mass_conversions<-read_excel("Data/SMSCG salinity modeling/Biomass conversi
 
 Read in zoop groupings
 ```{r}
-zoop_groups<-read_csv("Data/zoopcrosswalk2.csv", col_types=cols_only(Taxlifestage="c", IBMR="c"))%>%
+zoop_groups<-read_csv(here("Data/zoopcrosswalk2.csv"), col_types=cols_only(Taxlifestage="c", IBMR="c"))%>%
   distinct()
 ```
 
 
 Load Mysid biomass data
 ```{r}
-zoop_mysid<-read_excel("Data/1972-2020MysidBPUEMatrix.xlsx", # EMP
+zoop_mysid<-read_excel(here("Data/1972-2020MysidBPUEMatrix.xlsx"), # EMP
                        sheet="Mysid_BPUE_matrix_1972-2020", na = "NA",
                        col_types = c(rep("numeric", 4), "date", "text", "text", rep("text", 7), rep("numeric", 8)))%>%
   select(Date=SampleDate, Station=StationNZ, BPUE=`Hyperacanthomysis longirostris`)%>% # Only select Hyperacanthomysis longirostris
   mutate(Source="EMP")%>%
-  bind_rows(read_csv("Data/FMWT STN 2007to2019 Mysid BPUE.csv", # FMWT/STN
+  bind_rows(read_csv(here("Data/FMWT STN 2007to2019 Mysid BPUE.csv"), # FMWT/STN
                      col_types=cols_only(Station="c", SampleDate="c", Project="c", `Hyperacanthomysis longirostris`="d"))%>% 
               rename(Date=SampleDate, Source=Project, BPUE=`Hyperacanthomysis longirostris`)%>% # Only select Hyperacanthomysis longirostris
               mutate(Date=mdy(Date),
@@ -342,7 +343,7 @@ for (i in 1:nrow(sal_conversion_plots)) {
 
 Load in SMSCG modeled salinity
 ```{r, message=FALSE}
-scenario_file<-"Data/CSAMP_DS_SDM_salinity_scenarios.csv"
+scenario_file<-here("Data/CSAMP_DS_SDM_salinity_scenarios.csv")
 scenario_names<-tibble(name=colnames(read.csv(scenario_file)))%>%
   filter(str_detect(name, "sal_"))%>%
   rev()
@@ -402,7 +403,7 @@ zoop_saladjusted<-scenario_sal%>%
                         u95=~quantile(.x, 0.975, na.rm=T))), 
             .groups="drop")
 
-write_csv(zoop_saladjusted, file.path("Outputs", "CSAMP zoop sal adjustments.csv"))
+write_csv(zoop_saladjusted, here("Outputs", "CSAMP zoop sal adjustments.csv"))
 ```
 
 You can find the final zoop salinity adjustments [here](https://github.com/sbashevkin/FLOATDrought/blob/main/Outputs/CSAMP%20zoop%20sal%20adjustments.csv)
