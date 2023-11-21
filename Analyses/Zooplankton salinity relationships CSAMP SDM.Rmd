@@ -51,7 +51,7 @@ conflict_prefer("select", "dplyr")
 # Load and wrangle data
 
 ```{r}
-zoop_data<-Zoopsynther(Data_type="Community", Sources=c("EMP", "STN", "20mm", "FMWT"), Time_consistency = TRUE)
+zoop_data<-Zoopsynther(Data_type="Community", Sources=c("EMP", "STN", "20mm", "FMWT"), Time_consistency = FALSE)
 ```
 
 
@@ -104,8 +104,8 @@ zoop_data_mass<-zoop_data%>%
                           "Rotifera Adult", "Sinocalanus doerrii Larva", "Synchaeta Adult", "Synchaeta bicornis Adult", "Trichocerca Adult")) &
       
       !(SizeClass=="Micro" &Taxlifestage%in%c("Cirripedia Larva", "Cyclopoida Adult", "Oithona similis")) & #removing categories better retained in meso net from micro net matrix
-      Order!="Amphipoda" & # Remove amphipods
-      (Order!="Mysida" | Taxlifestage=="Hyperacanthomysis longirostris Adult"))%>% #Only retain Hyperacanthomysis longirostris
+      (is.na(Order) | Order!="Amphipoda") & # Remove amphipods
+      (is.na(Order) | Order!="Mysida" | Taxlifestage=="Hyperacanthomysis longirostris Adult"))%>% #Only retain Hyperacanthomysis longirostris
   mutate(Taxlifestage=recode(Taxlifestage, `Synchaeta bicornis Adult`="Synchaeta Adult", # Change some names to match to biomass conversion dataset
                              `Pseudodiaptomus Adult`="Pseudodiaptomus forbesi Adult",
                              `Acanthocyclops vernalis Adult`="Acanthocyclops Adult"))%>%
@@ -113,7 +113,7 @@ zoop_data_mass<-zoop_data%>%
   left_join(zoop_mysid, by=c("SampleID", "Taxlifestage", "SizeClass"))%>% # Add mysid biomass
   left_join(zoop_groups, by="Taxlifestage")%>% # Add IBMR categories
   mutate(BPUE=if_else(Taxlifestage=="Hyperacanthomysis longirostris Adult", BPUE_mysid, CPUE*CarbonWeight_ug))%>% # Create 1 BPUE variable
-  filter(!is.na(BPUE) & !is.na(Latitude) & !is.na(Longitude) & !is.na(SalSurf))%>% # Removes any data without BPUE, which is currently restricted to Decapod Larvae, and H. longirostris from STN. Also removes 20mm and EMP EZ stations without coordinates
+  filter(!is.na(BPUE) & !is.na(Latitude) & !is.na(Longitude) & !is.na(SalSurf))%>% # Removes any data without BPUE, which is currently restricted to Rotifera Adult, Copepoda Larva, and H. longirostris from STN. Also removes 20mm and EMP EZ stations without coordinates
   group_by(IBMR)%>%
   mutate(flag=if_else(all(c("Micro", "Meso")%in%SizeClass), "Remove", "Keep"))%>% # This and the next 2 lines are meant to ensure that all categories are consistent across the surveys. Since only EMP samples microzoops, only EMP data can be used for categories that include both micro and mesozoops.
   ungroup()%>%
